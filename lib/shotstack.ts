@@ -42,11 +42,11 @@ export function buildRenderPayload(
   // Product images fill the full frame — the product IS the hero, no random AI background
   const imageClips = buildImageClips(images, totalDuration);
 
-  // Top and bottom gradient bands keep text readable against any product image
+  // Left-to-right gradient: left half slightly dark for text, right stays clear for product
   const overlayClip: ShotstackClip = {
     asset: {
       type: 'html',
-      html: `<div style="width:1280px;height:720px;background:linear-gradient(to bottom,rgba(0,0,0,0.78) 0%,rgba(0,0,0,0.1) 38%,rgba(0,0,0,0.1) 58%,rgba(0,0,0,0.88) 100%);"></div>`,
+      html: `<div style="width:1280px;height:720px;background:linear-gradient(to right,rgba(0,0,0,0.50) 0%,rgba(0,0,0,0.15) 50%,rgba(0,0,0,0) 68%);"></div>`,
       width: 1280,
       height: 720,
     },
@@ -72,12 +72,12 @@ export function buildRenderPayload(
       };
 
   const textClips: ShotstackClip[] = [
-    // Title — top left, sits over the darkest part of the gradient
+    // Title — inline-block span so the dark background hugs only the text
     {
       asset: {
         type: 'html',
-        html: `<p style="font-family:'Arial Black',Arial,sans-serif;font-size:48px;font-weight:900;color:#ffffff;text-shadow:0 3px 18px rgba(0,0,0,1);margin:0;text-align:left;line-height:1.15;">${product.title}</p>`,
-        width: 900,
+        html: `<span style="display:inline-block;font-family:'Arial Black',Arial,sans-serif;font-size:40px;font-weight:900;color:#fff;background:rgba(0,0,0,0.58);padding:10px 22px;border-radius:14px;line-height:1.25;">${product.title}</span>`,
+        width: 620,
         height: 140,
       },
       start: 1.0,
@@ -86,32 +86,18 @@ export function buildRenderPayload(
       offset: { x: 0.04, y: -0.05 },
       transition: { in: 'fade' },
     },
-    // Price — bottom left
+    // Price — same inline-block treatment
     {
       asset: {
         type: 'html',
-        html: `<p style="font-family:'Arial Black',Arial,sans-serif;font-size:56px;font-weight:900;color:#ffffff;text-shadow:0 3px 14px rgba(0,0,0,1);margin:0;">\$${product.price}</p>`,
-        width: 320,
-        height: 90,
+        html: `<span style="display:inline-block;font-family:'Arial Black',Arial,sans-serif;font-size:44px;font-weight:900;color:#fff;background:rgba(0,0,0,0.58);padding:10px 22px;border-radius:14px;line-height:1;">\$${product.price}</span>`,
+        width: 280,
+        height: 80,
       },
       start: 8.0,
       length: totalDuration - 8.0,
       position: 'bottomLeft',
-      offset: { x: 0.05, y: 0.15 },
-      transition: { in: 'fade' },
-    },
-    // CTA — bottom right
-    {
-      asset: {
-        type: 'html',
-        html: `<p style="font-family:Arial,sans-serif;font-size:26px;font-weight:bold;color:#ffffff;background:#1A56DB;padding:14px 32px;border-radius:50px;margin:0;white-space:nowrap;">Shop Now →</p>`,
-        width: 260,
-        height: 68,
-      },
-      start: 14.0,
-      length: totalDuration - 14.0,
-      position: 'bottomRight',
-      offset: { x: -0.05, y: 0.15 },
+      offset: { x: 0.04, y: 0.15 },
       transition: { in: 'fade' },
     },
   ];
@@ -135,17 +121,16 @@ export function buildRenderPayload(
   };
 }
 
-const EFFECTS = ['zoomIn', 'zoomOut', 'slideLeft', 'slideRight', 'zoomIn'] as const;
-
 function buildImageClips(images: string[], totalDuration: number): ShotstackClip[] {
   const count = images.length;
   const seg = totalDuration / count;
-
   return images.map((src, i) => ({
     asset: { type: 'image', src },
     start: +(i * seg).toFixed(2),
     length: +seg.toFixed(2),
-    effect: EFFECTS[i % EFFECTS.length],
+    scale: 0.42,
+    position: 'right' as const,
+    offset: { x: -0.03, y: 0 },
     transition: {
       ...(i > 0 ? { in: 'fade' } : {}),
       ...(i < count - 1 ? { out: 'fade' } : {}),
