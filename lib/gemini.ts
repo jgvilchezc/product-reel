@@ -20,7 +20,7 @@ Price: $${product.price}
 
 Analyze the image(s) and return ONLY this JSON object (no markdown, no code fences):
 {
-  "voiceover": "2-3 sentence punchy ad script for text-to-speech, max 40 words",
+  "voiceover": "punchy ad script for text-to-speech narration, 55-65 words, designed to fill exactly 18 seconds when spoken at a steady pace — no filler, no repetition",
   "background_prompt": "detailed cinematic lifestyle photography prompt for AI image generation, 8k, professional, photorealistic",
   "mood": "one word only: luxury OR energetic OR minimal OR warm OR bold"
 }`;
