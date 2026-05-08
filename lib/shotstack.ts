@@ -171,5 +171,11 @@ export async function getRenderStatus(renderId: string): Promise<RenderStatus> {
 
   const data = await res.json();
   const r = data.response;
-  return { status: r.status, url: r.url ?? undefined, error: r.error ?? undefined };
+  const rawError = r.error;
+  const error = rawError
+    ? typeof rawError === 'string'
+      ? rawError
+      : (rawError as { message?: string }).message || JSON.stringify(rawError)
+    : undefined;
+  return { status: r.status, url: r.url ?? undefined, error };
 }

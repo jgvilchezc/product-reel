@@ -9,7 +9,7 @@ const DEMO_PRODUCT: ProductInput = {
     'Built for the toughest training sessions. The Nike Free Metcon 6 combines flexible Free sole technology with a stable, durable upper for ultimate gym performance.',
   price: '130',
   images: [
-    `${BASE_URL}/NIKE+FREE+METCON+6.jpg`,
+    `${BASE_URL}/nike1.jpg`,
     `${BASE_URL}/nike2.jpeg`,
     `${BASE_URL}/nike3.jpeg`,
   ],

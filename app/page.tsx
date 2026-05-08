@@ -77,7 +77,7 @@ export default function Home() {
         } else if (data.status === 'failed') {
           stopPolling();
           setDemoState('error');
-          setErrorMsg(data.error || 'Render failed');
+          setErrorMsg(typeof data.error === 'object' ? (data.error as { message?: string })?.message || 'Render failed' : data.error || 'Render failed');
         }
       } catch {
         // transient network error — keep polling
