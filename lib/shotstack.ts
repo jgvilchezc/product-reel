@@ -138,6 +138,38 @@ function buildImageClips(images: string[], totalDuration: number): ShotstackClip
   }));
 }
 
+function buildImageClipsWithEffects(images: string[], totalDuration: number, effects: string[]): ShotstackClip[] {
+  const count = images.length;
+  const seg = totalDuration / count;
+  return images.map((src, i) => ({
+    asset: { type: 'image', src },
+    start: +(i * seg).toFixed(2),
+    length: +seg.toFixed(2),
+    scale: 0.42,
+    position: 'right' as const,
+    offset: { x: -0.03, y: 0 },
+    effect: effects[i % effects.length],
+    transition: {
+      ...(i > 0 ? { in: 'fade' } : {}),
+      ...(i < count - 1 ? { out: 'fade' } : {}),
+    },
+  }));
+}
+
+export async function uploadImageToIngest(dataUri: string): Promise<string> {
+  const res = await fetch(`${SHOTSTACK_BASE}/upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+    body: JSON.stringify({ url: dataUri }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Shotstack ingest error ${res.status}: ${err}`);
+  }
+  const data = await res.json();
+  return data.response.attributes.url as string;
+}
+
 export async function submitRender(payload: ReturnType<typeof buildRenderPayload>): Promise<string> {
   const res = await fetch(`${SHOTSTACK_BASE}/render`, {
     method: 'POST',
@@ -179,4 +211,203 @@ export async function getRenderStatus(renderId: string): Promise<RenderStatus> {
       : (rawError as { message?: string }).message || JSON.stringify(rawError)
     : undefined;
   return { status: r.status, url: r.url ?? undefined, error };
+}
+
+export function buildBoldEnergyPayload(
+  product: ProductInput,
+  analysis: GeminiAnalysis,
+  audioUrl?: string,
+) {
+  const images = product.images.slice(0, 5).map(normalizeImageUrl);
+  const totalDuration = 20;
+
+  // Full-frame: image fills entire canvas — visually distinct from Template 1's portrait layout
+  const count = images.length;
+  const seg = totalDuration / count;
+  const imageClips: ShotstackClip[] = images.map((src, i) => ({
+    asset: { type: 'image', src },
+    start: +(i * seg).toFixed(2),
+    length: +seg.toFixed(2),
+    scale: 1.0,
+    position: 'center' as const,
+    transition: {
+      ...(i > 0 ? { in: 'fade' } : {}),
+      ...(i < count - 1 ? { out: 'fade' } : {}),
+    },
+  }));
+
+  // Heavy bottom vignette for text readability over full-frame image
+  const overlayClip: ShotstackClip = {
+    asset: {
+      type: 'html',
+      html: `<div style="width:1280px;height:720px;background:linear-gradient(to top,rgba(5,5,5,0.96) 0%,rgba(5,5,5,0.55) 30%,rgba(5,5,5,0) 55%);"></div>`,
+      width: 1280,
+      height: 720,
+    },
+    start: 0,
+    length: totalDuration,
+  };
+
+  const voiceoverClip: ShotstackClip = audioUrl
+    ? { asset: { type: 'audio', src: audioUrl, volume: 1 }, start: 0, length: totalDuration }
+    : {
+        asset: { type: 'text-to-speech', text: analysis.voiceover, voice: 'Matthew', newscaster: true },
+        start: 0,
+        length: totalDuration,
+      };
+
+  // All text centered at bottom — movie-poster layout
+  const textClips: ShotstackClip[] = [
+    {
+      asset: {
+        type: 'html',
+        html: `<div style="text-align:center;width:1000px;"><span style="font-family:'Arial Black',Arial,sans-serif;font-size:54px;font-weight:900;color:#ffffff;line-height:1.1;">${product.title}</span></div>`,
+        width: 1000,
+        height: 120,
+      },
+      start: 1.0,
+      length: totalDuration - 1.0,
+      position: 'bottom',
+      offset: { x: 0, y: 0.23 },
+      transition: { in: 'fade' },
+    },
+    {
+      asset: {
+        type: 'html',
+        html: `<div style="text-align:center;width:800px;"><span style="display:inline-block;font-family:'Arial Black',Arial,sans-serif;font-size:32px;font-weight:900;color:#fff;margin-right:18px;vertical-align:middle;">\$${product.price}</span><span style="display:inline-block;font-family:'Arial Black',Arial,sans-serif;font-size:17px;font-weight:700;color:#fff;background:#1A56DB;padding:10px 24px;border-radius:50px;vertical-align:middle;">Shop Now →</span></div>`,
+        width: 800,
+        height: 68,
+      },
+      start: 7.0,
+      length: totalDuration - 7.0,
+      position: 'bottom',
+      offset: { x: 0, y: 0.09 },
+      transition: { in: 'fade' },
+    },
+  ];
+
+  const tracks: ShotstackTrack[] = [
+    { clips: textClips },
+    { clips: [voiceoverClip] },
+    { clips: [overlayClip] },
+    { clips: imageClips },
+  ];
+
+  return {
+    timeline: { tracks },
+    output: { format: 'mp4', resolution: 'hd', fps: 30, quality: 'high', size: { width: 1280, height: 720 } },
+  };
+}
+
+export function buildCleanMinimalPayload(
+  product: ProductInput,
+  analysis: GeminiAnalysis,
+  audioUrl?: string,
+) {
+  const images = product.images.slice(0, 5).map(normalizeImageUrl);
+  const totalDuration = 20;
+
+  // Same right-side image positioning as Template 1 — no zoom effects, no overflow
+  const imageClips = buildImageClips(images, totalDuration);
+
+  // Solid off-white panel on left — provides opaque background for dark text (no transparency issues)
+  const panelClip: ShotstackClip = {
+    asset: {
+      type: 'html',
+      html: `<div style="width:560px;height:720px;background:#F5F5F0;"></div>`,
+      width: 560,
+      height: 720,
+    },
+    start: 0,
+    length: totalDuration,
+    position: 'left',
+  };
+
+  const voiceoverClip: ShotstackClip = audioUrl
+    ? { asset: { type: 'audio', src: audioUrl, volume: 1 }, start: 0, length: totalDuration }
+    : {
+        asset: { type: 'text-to-speech', text: analysis.voiceover, voice: 'Joanna' },
+        start: 0,
+        length: totalDuration,
+      };
+
+  const textClips: ShotstackClip[] = [
+    {
+      asset: {
+        type: 'html',
+        html: `<span style="display:inline-block;font-family:Georgia,serif;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:#888888;">NEW ARRIVAL</span>`,
+        width: 460,
+        height: 28,
+      },
+      start: 0.8,
+      length: totalDuration - 0.8,
+      position: 'topLeft',
+      offset: { x: 0.05, y: -0.04 },
+      transition: { in: 'fade' },
+    },
+    {
+      asset: {
+        type: 'html',
+        html: `<span style="display:block;font-family:Georgia,'Times New Roman',serif;font-size:44px;font-weight:700;color:#111111;line-height:1.2;">${product.title}</span>`,
+        width: 480,
+        height: 160,
+      },
+      start: 1.0,
+      length: totalDuration - 1.0,
+      position: 'topLeft',
+      offset: { x: 0.05, y: -0.01 },
+      transition: { in: 'fade' },
+    },
+    {
+      asset: {
+        type: 'html',
+        html: `<div style="width:36px;height:3px;background:#111111;"></div>`,
+        width: 80,
+        height: 6,
+      },
+      start: 1.5,
+      length: totalDuration - 1.5,
+      position: 'topLeft',
+      offset: { x: 0.05, y: 0.15 },
+      transition: { in: 'fade' },
+    },
+    {
+      asset: {
+        type: 'html',
+        html: `<span style="display:inline-block;font-family:Georgia,serif;font-size:30px;font-weight:700;color:#16A34A;">\$${product.price}</span>`,
+        width: 220,
+        height: 54,
+      },
+      start: 7.0,
+      length: totalDuration - 7.0,
+      position: 'bottomLeft',
+      offset: { x: 0.05, y: 0.18 },
+      transition: { in: 'fade' },
+    },
+    {
+      asset: {
+        type: 'html',
+        html: `<span style="display:inline-block;font-family:Georgia,serif;font-size:15px;font-weight:600;color:#ffffff;background:#111111;padding:10px 26px;border-radius:50px;letter-spacing:0.04em;">Discover More</span>`,
+        width: 260,
+        height: 56,
+      },
+      start: 11.0,
+      length: totalDuration - 11.0,
+      position: 'bottomLeft',
+      offset: { x: 0.05, y: 0.10 },
+      transition: { in: 'fade' },
+    },
+  ];
+
+  const tracks: ShotstackTrack[] = [
+    { clips: textClips },
+    { clips: [voiceoverClip] },
+    { clips: [panelClip] },
+    { clips: imageClips },
+  ];
+
+  return {
+    timeline: { tracks },
+    output: { format: 'mp4', resolution: 'hd', fps: 30, quality: 'high', size: { width: 1280, height: 720 } },
+  };
 }

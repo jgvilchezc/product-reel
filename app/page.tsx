@@ -1,302 +1,954 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, ReactNode, FC } from 'react';
 
-type DemoState = 'idle' | 'submitting' | 'rendering' | 'done' | 'error';
+// ── Icon primitives ────────────────────────────────────────────
+interface IconProps { size?: number; className?: string; }
+type IconFC = FC<IconProps>;
 
-const STATUS_LABELS: Record<string, string> = {
-  queued: 'Queued...',
-  fetching: 'Fetching assets...',
-  rendering: 'Rendering video...',
-  saving: 'Saving...',
-  done: 'Done!',
-  failed: 'Failed',
+const Icon = ({ children, size = 18, className = '' }: IconProps & { children: ReactNode }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+       className={`lucide ${className}`} stroke="currentColor" aria-hidden="true">
+    {children}
+  </svg>
+);
+
+const IPlay:     IconFC = (p) => <Icon {...p}><path d="M7 4.5v15l13-7.5z" fill="currentColor" stroke="none"/></Icon>;
+const IArrow:    IconFC = (p) => <Icon {...p}><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></Icon>;
+const ICheck:    IconFC = (p) => <Icon {...p}><path d="M20 6 9 17l-5-5"/></Icon>;
+const ISpark:    IconFC = (p) => <Icon {...p}><path d="M12 3l1.8 4.6L18 9.5l-4.2 1.9L12 16l-1.8-4.6L6 9.5l4.2-1.9z"/><path d="M19 14l.7 1.8L21.5 16.5l-1.8.7L19 19l-.7-1.8L16.5 16.5l1.8-.7z"/></Icon>;
+const IUpload:   IconFC = (p) => <Icon {...p}><path d="M16 16l-4-4-4 4"/><path d="M12 12v9"/><path d="M20.4 14.5A5 5 0 0 0 18 5a7 7 0 0 0-13.4 2A4.5 4.5 0 0 0 6 16h2"/></Icon>;
+const IWand:     IconFC = (p) => <Icon {...p}><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8L19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2L19 5"/><path d="m3 21 9-9"/><path d="M12.2 6.2L11 5"/></Icon>;
+const ILayers:   IconFC = (p) => <Icon {...p}><path d="m12 2 9 5-9 5-9-5 9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></Icon>;
+const IDownload: IconFC = (p) => <Icon {...p}><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></Icon>;
+const ILock:     IconFC = (p) => <Icon {...p}><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></Icon>;
+const IEye:      IconFC = (p) => <Icon {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></Icon>;
+const IEyeOff:   IconFC = (p) => <Icon {...p}><path d="M3 3l18 18"/><path d="M10.6 6.1A10.4 10.4 0 0 1 12 6c6.5 0 10 7 10 7a17.5 17.5 0 0 1-3.2 4"/><path d="M6.5 7.6A17.5 17.5 0 0 0 2 13s3.5 7 10 7c1.4 0 2.7-.3 3.9-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></Icon>;
+const IShop:     IconFC = (p) => <Icon {...p}><path d="M5 7h14l-1.2 12.1A2 2 0 0 1 15.8 21H8.2a2 2 0 0 1-2-1.9L5 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></Icon>;
+const ISend:     IconFC = (p) => <Icon {...p}><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></Icon>;
+const IGithub:   IconFC = (p) => <Icon {...p}><path d="M9 19c-4 1.2-4-2-6-2.5"/><path d="M15 21v-3.5a3 3 0 0 0-.9-2.3c2.97-.33 6.1-1.46 6.1-6.59A5.1 5.1 0 0 0 18.6 4.6a4.7 4.7 0 0 0-.1-3.5s-1.1-.34-3.5 1.3a12 12 0 0 0-6 0C6.6.76 5.5 1.1 5.5 1.1a4.7 4.7 0 0 0-.1 3.5A5.1 5.1 0 0 0 4 8.62c0 5.1 3.13 6.26 6.1 6.59a3 3 0 0 0-.9 2.3V21"/></Icon>;
+const ITerminal: IconFC = (p) => <Icon {...p}><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></Icon>;
+const ICloud:    IconFC = (p) => <Icon {...p}><path d="M17 18a4 4 0 0 0 .6-7.95A6 6 0 1 0 6 12c0 .3 0 .6.07.9A4 4 0 0 0 7 18z"/></Icon>;
+const ILink:     IconFC = (p) => <Icon {...p}><path d="M9 17H7a5 5 0 0 1 0-10h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><path d="M8 12h8"/></Icon>;
+const IRefresh:  IconFC = (p) => <Icon {...p}><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></Icon>;
+const IPause:    IconFC = (p) => <Icon {...p}><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/></Icon>;
+const IClock:    IconFC = (p) => <Icon {...p}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></Icon>;
+const IMessage:  IconFC = (p) => <Icon {...p}><path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-7a8 8 0 0 1 8-8h2a8 8 0 0 1 8 7z"/></Icon>;
+const IBolt:     IconFC = (p) => <Icon {...p}><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor" stroke="none"/></Icon>;
+const IMoon:     IconFC = (p) => <Icon {...p}><path d="M21 12.8A8 8 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></Icon>;
+const IBook:     IconFC = (p) => <Icon {...p}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14z"/><path d="M4 19.5V21h16"/></Icon>;
+const ICopy:     IconFC = (p) => <Icon {...p}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Icon>;
+
+// ── Shared ─────────────────────────────────────────────────────
+const SectionEyebrow = ({ children, icon }: { children: ReactNode; icon: ReactNode }) => (
+  <div className="inline-flex items-center gap-2 text-[11.5px] font-mono uppercase tracking-[0.2em] text-brand-soft">
+    {icon} {children}
+  </div>
+);
+
+// ── NAVBAR ─────────────────────────────────────────────────────
+const Navbar = () => (
+  <header className="sticky top-0 z-50 bg-ink/70 backdrop-blur-xl border-b border-line">
+    <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="#top" className="flex items-center gap-2">
+        <span className="relative w-6 h-6 rounded-md bg-gradient-to-br from-brand to-violet flex items-center justify-center">
+          <IPlay size={11} className="translate-x-[1px] text-white"/>
+          <span className="absolute -inset-0.5 rounded-md bg-brand/40 blur-md -z-10"/>
+        </span>
+        <span className="font-display text-[15px] font-semibold tracking-tight text-white">ProductReel</span>
+      </a>
+      <nav className="flex items-center gap-1 sm:gap-2">
+        <a href="#how-it-works" className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">How it works</a>
+        <a href="#chat"         className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">AI Director</a>
+        <a href="#setup"        className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">Setup</a>
+        <a href="#demo"         className="text-[13px] text-white/85 hover:text-white px-3 py-2 rounded-lg border border-line hover:border-line2 transition-colors">View demo</a>
+        <a href="#waitlist"     className="text-[13px] font-medium text-white bg-brand hover:bg-brand-hover px-3.5 py-2 rounded-lg shadow-glow-sm hover:shadow-glow transition-all">Get early access</a>
+      </nav>
+    </div>
+  </header>
+);
+
+// ── HERO ───────────────────────────────────────────────────────
+const MiniReel = ({ label, accent, live }: { label: string; accent: string; live: boolean }) => (
+  <div className={`relative rounded-lg overflow-hidden ${live ? 'live-border' : 'border border-line'}`}>
+    <div className="relative rounded-[7px] overflow-hidden bg-[#0a0b10]">
+      <div className="aspect-[9/14] relative">
+        <div className={`absolute inset-0 bg-gradient-to-br ${accent} opacity-30`}/>
+        <div className="absolute inset-0 stripes-b opacity-30"/>
+        <div className="absolute inset-0 scanlines opacity-50"/>
+        <div className="absolute inset-x-0 bottom-0 p-2">
+          <div className="text-[10px] font-mono text-white/65 uppercase tracking-[0.18em]">{label}</div>
+          <div className="mt-1 h-0.5 rounded-full bg-white/15 overflow-hidden">
+            <div className={`h-full bg-white/80 ${live ? 'shimmer-bg' : ''}`} style={{ width: live ? '34%' : '12%' }}/>
+          </div>
+        </div>
+        {live && (
+          <div className="absolute top-2 left-2 inline-flex items-center gap-1 text-[9.5px] font-mono uppercase text-white/85">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose"/>playing
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
+const HeroShowcase = () => (
+  <div className="relative">
+    <div className="absolute -inset-6 rounded-[28px] pointer-events-none"
+         style={{ background: 'radial-gradient(60% 60% at 50% 50%, rgba(61,123,255,0.25), transparent 70%)', filter: 'blur(40px)' }}/>
+    <div className="relative grid grid-cols-1 lg:grid-cols-[1.1fr_2fr] gap-4 sm:gap-5 rounded-2xl border border-line bg-card/80 backdrop-blur p-3 sm:p-4 shadow-glow">
+      <div className="relative rounded-xl border border-line bg-panel overflow-hidden">
+        <div className="px-3 h-9 border-b border-line flex items-center gap-2 bg-[#0a0b10]">
+          <IShop size={13} className="text-white/50"/>
+          <span className="font-mono text-[11px] text-white/45">shopify · product.created</span>
+          <span className="ml-auto inline-flex items-center gap-1 text-[10.5px] font-mono text-ok/90">
+            <span className="w-1.5 h-1.5 rounded-full bg-ok"/>webhook
+          </span>
+        </div>
+        <div className="aspect-square relative">
+          <div className="absolute inset-0 stripes-a opacity-40"/>
+          <div className="absolute inset-0 grid place-items-center">
+            <div className="w-3/5 aspect-square rounded-2xl bg-gradient-to-br from-white/8 to-white/3 border border-white/10 floaty grid place-items-center">
+              <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-white/35">product image</span>
+            </div>
+          </div>
+        </div>
+        <div className="px-3 py-2.5 border-t border-line flex items-center justify-between">
+          <div className="text-[12.5px] text-white/80">Air Jordan 1 Retro</div>
+          <div className="text-[12px] font-mono text-white/45">$180</div>
+        </div>
+      </div>
+      <div className="relative rounded-xl border border-line bg-panel overflow-hidden">
+        <div className="px-3 h-9 border-b border-line flex items-center gap-2 bg-[#0a0b10]">
+          <ISpark size={13} className="text-violet-soft"/>
+          <span className="font-mono text-[11px] text-white/45">productreel · 3 reels rendered · 47s</span>
+          <span className="ml-auto inline-flex items-center gap-1 text-[10.5px] font-mono text-brand-soft">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-soft animate-pulse"/>live
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-2 p-3">
+          {([
+            { label: 'Bold & Dynamic',  accent: 'from-rose to-amber',        live: false },
+            { label: 'Clean & Minimal', accent: 'from-white/40 to-white/10', live: true  },
+            { label: 'Story Mode',      accent: 'from-brand to-violet',      live: false },
+          ] as const).map((r, i) => <MiniReel key={i} {...r}/>)}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const LogoStrip = () => (
+  <div className="mt-14 sm:mt-16">
+    <div className="text-center text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/35">
+      Built for Shopify merchants of every size
+    </div>
+    <div className="mt-5 relative overflow-hidden">
+      <div className="flex gap-12 marquee-track whitespace-nowrap text-white/35 font-display text-lg">
+        {Array.from({ length: 2 }).flatMap((_, k) =>
+          ['Maverick Goods', 'Atelier 24', 'Hummingbird Co.', 'North Range', 'Studio Echo', 'Pomelo', 'Half Moon', 'Saltwood'].map((n, i) => (
+            <span key={`${k}-${i}`} className="flex items-center gap-2">
+              <span className="w-1 h-1 rounded-full bg-white/20"/>{n}
+            </span>
+          ))
+        )}
+      </div>
+    </div>
+  </div>
+);
+
+const Hero = () => (
+  <section id="top" className="relative overflow-hidden">
+    <div className="absolute inset-0 hero-grain pointer-events-none"/>
+    <div className="absolute inset-0 grid-bg pointer-events-none"/>
+    <div className="relative max-w-6xl mx-auto px-6 pt-24 pb-12 sm:pt-32 sm:pb-20">
+      <div className="flex justify-center">
+        <div className="inline-flex items-center gap-2 rounded-full border border-violet/40 bg-violet/10 backdrop-blur px-3 py-1 text-[12px] font-medium text-violet-soft">
+          <ISpark size={12}/> Gemini Vision · Shotstack render pipeline
+        </div>
+      </div>
+      <h1 className="mt-7 text-center font-display font-bold tracking-[-0.02em] text-white text-[44px] leading-[1.02] sm:text-6xl md:text-[80px] md:leading-[0.98]">
+        <span className="block">Every product you upload</span>
+        <span className="block text-gradient">gets a video. Automatically.</span>
+      </h1>
+      <p className="mt-7 mx-auto max-w-2xl text-center text-[15px] sm:text-[17px] text-white/55 leading-relaxed">
+        Connect your Shopify store once. The next time you add a product, ProductReel
+        ships a 20-second cinematic ad — no editor, no template hunting, no effort.
+      </p>
+      <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <a href="#demo" className="group inline-flex items-center gap-2 bg-brand hover:bg-brand-hover text-white text-[14.5px] font-medium px-5 py-3 rounded-lg shadow-glow ring-1 ring-brand/40 transition-all">
+          Try the demo <IArrow size={16} className="transition-transform group-hover:translate-x-0.5"/>
+        </a>
+        <a href="#how-it-works" className="inline-flex items-center gap-2 text-white/85 hover:text-white text-[14.5px] font-medium px-5 py-3 rounded-lg border border-line hover:border-line2 hover:bg-white/[0.02] transition-all">
+          <IPlay size={13}/> 90-second tour
+        </a>
+      </div>
+      <div className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[12.5px] text-white/45">
+        {['No credit card required', 'First 10 videos free', 'Setup in 3 minutes'].map(t => (
+          <span key={t} className="inline-flex items-center gap-1.5">
+            <ICheck size={13} className="text-brand-soft"/> {t}
+          </span>
+        ))}
+      </div>
+      <div className="mt-16 sm:mt-20 mx-auto max-w-5xl"><HeroShowcase/></div>
+      <LogoStrip/>
+    </div>
+  </section>
+);
+
+// ── HOW IT WORKS ───────────────────────────────────────────────
+interface StepData { n: string; I: IconFC; title: string; body: string; }
+
+const StepCard = ({ step: { n, I, title, body } }: { step: StepData }) => (
+  <div className="group relative rounded-2xl border border-line bg-card p-6 sm:p-7 card-hover overflow-hidden">
+    <div className="absolute top-0 right-0 w-40 h-40 pointer-events-none"
+         style={{ background: 'radial-gradient(closest-side, rgba(61,123,255,0.18), transparent)' }}/>
+    <div className="relative flex items-center justify-between">
+      <span className="font-mono text-[11px] tracking-widest text-white/35">{n}</span>
+      <div className="w-9 h-9 rounded-lg border border-line bg-[#0E0F14] grid place-items-center text-brand-soft group-hover:border-brand/40 transition-colors">
+        <I size={17}/>
+      </div>
+    </div>
+    <h3 className="relative mt-8 font-display text-lg font-semibold text-white tracking-tight">{title}</h3>
+    <p className="relative mt-2 text-[14px] leading-relaxed text-white/55">{body}</p>
+  </div>
+);
+
+const HowItWorks = () => {
+  const steps: StepData[] = [
+    { n: '01', I: IUpload, title: 'Upload your product',
+      body: 'Add a product to your Shopify store like you always do. The webhook fires the moment the listing goes live.' },
+    { n: '02', I: IWand,   title: 'AI picks templates & generates',
+      body: 'Gemini Vision reads your photos, writes a voiceover script, and Shotstack renders three cinematic 20-second cuts in parallel.' },
+    { n: '03', I: ILayers, title: 'Choose your favorite or customize',
+      body: 'Pick the cut that fits your brand, download the MP4, or describe a new vision in plain language and let the AI Director re-cut it.' },
+  ];
+  return (
+    <section id="how-it-works" className="border-t border-line">
+      <div className="max-w-6xl mx-auto px-6 py-20 sm:py-28">
+        <SectionEyebrow icon={<ICheck size={12}/>}>How it works</SectionEyebrow>
+        <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white max-w-3xl">
+          From product upload to <span className="text-gradient-violet">finished ad</span> in under 60 seconds.
+        </h2>
+        <div className="mt-12 grid gap-4 md:grid-cols-3 md:gap-5">
+          {steps.map(s => <StepCard key={s.n} step={s}/>)}
+        </div>
+      </div>
+    </section>
+  );
 };
 
-export default function Home() {
-  const [geminiKey, setGeminiKey] = useState('');
-  const [demoState, setDemoState] = useState<DemoState>('idle');
-  const [renderStatus, setRenderStatus] = useState('');
-  const [videoUrl, setVideoUrl] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [elapsed, setElapsed] = useState(0);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+// ── DEMO SECTION ───────────────────────────────────────────────
+interface TemplateConfig {
+  id: string; label: string; tagline: string; palette: string[];
+  accent: string; bg: string; duration: string; voice: string;
+}
 
-  function stopPolling() {
-    if (pollRef.current) clearInterval(pollRef.current);
-    if (timerRef.current) clearInterval(timerRef.current);
-  }
+const TEMPLATES: TemplateConfig[] = [
+  { id: 'darkLuxury',   label: 'Dark Luxury',   tagline: 'Deep shadows, cinematic pacing, luxury feel.',
+    palette: ['#1A1A1A','#C9A96E','#0a0a0a'], accent: 'from-amber/40 to-amber/5',
+    bg: 'from-amber/20 via-amber/5 to-transparent', duration: '00:20', voice: 'Matthew · Deep' },
+  { id: 'boldEnergy',   label: 'Bold Energy',   tagline: 'High contrast, electric blue, energetic cuts.',
+    palette: ['#1A56DB','#FFFFFF','#050505'], accent: 'from-brand/60 to-brand/10',
+    bg: 'from-brand/30 via-brand/10 to-transparent', duration: '00:20', voice: 'Matthew · Energetic' },
+  { id: 'cleanMinimal', label: 'Clean Minimal', tagline: 'Editorial whitespace, restrained type, slow zooms.',
+    palette: ['#111111','#16A34A','#FAFAFA'], accent: 'from-ok/40 to-ok/5',
+    bg: 'from-ok/20 via-ok/5 to-transparent', duration: '00:20', voice: 'Joanna · Soft' },
+];
 
-  async function handleDemo() {
-    if (demoState === 'rendering' || demoState === 'submitting') return;
+type DemoStep = 'input' | 'rendering' | 'picker';
+const STATUS_PROGRESS: Record<string, number> = { queued: 5, fetching: 20, rendering: 65, saving: 90, done: 100 };
 
-    setDemoState('submitting');
-    setErrorMsg('');
-    setVideoUrl('');
-    setRenderStatus('');
-    setElapsed(0);
+const DemoInput = ({ apiKey, setApiKey, showKey, setShowKey, onStart, error }: {
+  apiKey: string; setApiKey: (v: string) => void;
+  showKey: boolean; setShowKey: (fn: (v: boolean) => boolean) => void;
+  onStart: () => void; error: string;
+}) => (
+  <div className="grid md:grid-cols-2">
+    <div className="p-6 sm:p-8 border-b md:border-b-0 md:border-r border-line bg-[#0E0F14]">
+      <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Input</div>
+      <h3 className="mt-2 font-display text-2xl font-semibold text-white tracking-tight">Generate three videos from one product.</h3>
+      <p className="mt-2 text-[14px] text-white/55 max-w-md">
+        We&apos;ll use a sample Nike product. Bring your own Gemini key for a personalized voiceover, or skip and use ours.
+      </p>
+      <label className="mt-6 block text-[12px] font-mono uppercase tracking-widest text-white/45">
+        Gemini API key <span className="text-white/30 normal-case font-sans">(optional)</span>
+      </label>
+      <div className="mt-2 relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40"><ILock size={14}/></span>
+        <input type={showKey ? 'text' : 'password'} value={apiKey} onChange={e => setApiKey(e.target.value)}
+          placeholder="AIza••••••••••••••••••••"
+          className="w-full bg-[#0a0b10] border border-line focus:border-brand/60 focus-ring text-[13.5px] text-white placeholder:text-white/25 font-mono pl-9 pr-10 py-3 rounded-lg transition-colors"/>
+        <button type="button" onClick={() => setShowKey(s => !s)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-white/45 hover:text-white hover:bg-white/5">
+          {showKey ? <IEyeOff size={15}/> : <IEye size={15}/>}
+        </button>
+      </div>
+      <div className="mt-2 text-[11.5px] text-white/40">Stored only in browser. Never sent to our servers.</div>
+      {error && <div className="mt-3 px-3 py-2.5 rounded-lg bg-rose/10 border border-rose/30 text-rose text-[12.5px]">{error}</div>}
+      <button onClick={onStart}
+        className="mt-7 w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-brand hover:bg-brand-hover text-white text-sm font-medium px-5 py-3 rounded-lg shadow-glow ring-1 ring-brand/40 transition-all">
+        <ISpark size={15}/> Generate videos <IArrow size={15}/>
+      </button>
+      <div className="mt-3 text-[12px] text-white/40">Average run · 47 seconds · 3 templates in parallel</div>
+    </div>
+    <div className="p-6 sm:p-8 bg-card">
+      <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Sample product</div>
+      <div className="mt-3 rounded-xl border border-line bg-[#0a0b10] overflow-hidden">
+        <div className="aspect-[16/10] relative overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/nike1.jpg" alt="Nike Free Metcon 6" className="absolute inset-0 w-full h-full object-cover"/>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent pointer-events-none"/>
+        </div>
+        <div className="p-4 border-t border-line flex items-center justify-between">
+          <div>
+            <div className="text-[14.5px] text-white font-medium">Nike Free Metcon 6</div>
+            <div className="text-[12px] text-white/45">Training shoe · Black/White</div>
+          </div>
+          <div className="text-[15px] font-semibold text-white">$130</div>
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {(['/nike2.jpeg', '/nike3.jpeg', '/nike4.jpeg'] as const).map((src, i) => (
+          <div key={i} className="aspect-square rounded-lg border border-line bg-[#0a0b10] relative overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover"/>
+            <span className="absolute bottom-1 right-1.5 text-[10px] font-mono text-white/40 drop-shadow">0{i+1}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+const Logline = ({ status, t, children }: { status: 'ok'|'run'|'err'; t: string; children: ReactNode }) => {
+  const dot = status === 'ok' ? 'bg-ok' : status === 'run' ? 'bg-brand-soft animate-pulse' : 'bg-rose';
+  return (
+    <div className="flex items-center gap-3">
+      <span className={`w-1.5 h-1.5 rounded-full ${dot}`}/>
+      <span className="text-white/35">[{t}]</span>
+      <span>{children}</span>
+    </div>
+  );
+};
+
+const RenderingCard = ({ t, pct }: { t: TemplateConfig; pct: number }) => (
+  <div className="rounded-xl border border-line bg-[#0a0b10] overflow-hidden">
+    <div className="aspect-[9/12] relative">
+      <div className={`absolute inset-0 bg-gradient-to-br ${t.bg}`}/>
+      <div className="absolute inset-0 stripes-a opacity-30"/>
+      <div className="absolute inset-0 scanlines opacity-50"/>
+      <div className="absolute inset-x-3 bottom-3">
+        <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/65">{t.label}</div>
+        <div className="mt-1 h-1.5 rounded-full bg-white/10 overflow-hidden relative">
+          <div className="absolute inset-y-0 left-0 bg-white/85 transition-[width]" style={{ width: `${pct}%` }}/>
+          <div className="absolute inset-0 shimmer-bg"/>
+        </div>
+        <div className="mt-1 flex justify-between text-[10px] font-mono text-white/45">
+          <span>{Math.round(pct)}%</span><span>shotstack · 1080p</span>
+        </div>
+      </div>
+      <div className="absolute top-2 left-2 inline-flex items-center gap-1.5 text-[10px] font-mono uppercase text-white/65">
+        <span className="w-1.5 h-1.5 rounded-full bg-brand-soft animate-pulse"/>rendering
+      </div>
+    </div>
+  </div>
+);
+
+const fmtTime = (s: number) =>
+  `${Math.floor(s/60).toString().padStart(2,'0')}:${Math.floor(s%60).toString().padStart(2,'0')}`;
+
+const DemoRendering = ({ progress, elapsed, onCancel }: { progress: number[]; elapsed: number; onCancel: () => void }) => {
+  const total = (progress[0]+progress[1]+progress[2])/3;
+  return (
+    <div className="p-6 sm:p-8">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <span className="relative inline-flex w-2.5 h-2.5">
+            <span className="absolute inset-0 rounded-full bg-brand-soft animate-ping opacity-60"/>
+            <span className="relative w-2.5 h-2.5 rounded-full bg-brand-soft"/>
+          </span>
+          <h3 className="font-display text-xl sm:text-2xl font-semibold text-white shimmer-text">Rendering 3 templates...</h3>
+        </div>
+        <div className="flex items-center gap-3 text-[12.5px] font-mono">
+          <span className="inline-flex items-center gap-1.5 text-white/55"><IClock size={13}/> {fmtTime(elapsed)} elapsed</span>
+          <button onClick={onCancel} className="text-white/55 hover:text-white px-2.5 py-1.5 rounded-md border border-line hover:border-line2">Cancel</button>
+        </div>
+      </div>
+      <div className="mt-5 rounded-xl border border-line bg-[#0a0b10] p-4">
+        <div className="flex items-center justify-between text-[12px] font-mono text-white/45">
+          <span>Master pipeline</span><span>{Math.round(total)}%</span>
+        </div>
+        <div className="mt-2 relative h-2 rounded-full bg-white/8 overflow-hidden">
+          <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-brand to-violet" style={{ width: `${total}%` }}/>
+          <div className="absolute inset-0 shimmer-bg mix-blend-screen opacity-80"/>
+        </div>
+      </div>
+      <div className="mt-5 grid gap-4 md:grid-cols-3">
+        {TEMPLATES.map((t,i) => <RenderingCard key={t.id} t={t} pct={progress[i]}/>)}
+      </div>
+      <div className="mt-5 rounded-xl border border-line bg-[#0a0b10] overflow-hidden">
+        <div className="px-4 h-9 border-b border-line flex items-center gap-2">
+          <ITerminal size={13} className="text-white/45"/>
+          <span className="font-mono text-[11px] text-white/45">render.log</span>
+        </div>
+        <div className="p-4 font-mono text-[11.5px] leading-6 text-white/55 max-h-44 overflow-hidden">
+          <Logline status="ok"  t="00:00.4">connected · sample product loaded</Logline>
+          <Logline status="ok"  t="00:01.1">gemini · vision · 3 frames analyzed</Logline>
+          <Logline status="ok"  t="00:02.8">script · voiceover drafted (167 words)</Logline>
+          <Logline status="run" t="00:03.0">shotstack · render · bold-dynamic — queued</Logline>
+          <Logline status="run" t="00:03.0">shotstack · render · clean-minimal — queued</Logline>
+          <Logline status="run" t="00:03.0">shotstack · render · story-mode — queued</Logline>
+          <Logline status="run" t="00:04.6">tts · elevenlabs · synthesis · 3 voices</Logline>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MetaPill = ({ k, v }: { k: string; v: string }) => (
+  <div className="flex items-center justify-between rounded-lg border border-line bg-[#0a0b10] px-3 py-2">
+    <span className="font-mono text-white/40 uppercase tracking-widest text-[10.5px]">{k}</span>
+    <span className="text-white/80">{v}</span>
+  </div>
+);
+
+const VideoModal = ({ url, onClose }: { url: string; onClose: () => void }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8" onClick={onClose}>
+    <div className="absolute inset-0 bg-black/85 backdrop-blur-md"/>
+    <div className="relative z-10 w-full max-w-5xl" onClick={e => e.stopPropagation()}>
+      <div className="rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(0,0,0,0.8)]">
+        <video src={url} controls autoPlay className="w-full aspect-video bg-black block"/>
+      </div>
+      <button onClick={onClose}
+        className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-card border border-line grid place-items-center text-white/60 hover:text-white hover:border-line2 transition-colors shadow-lg">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M1 1l12 12M13 1L1 13"/>
+        </svg>
+      </button>
+      <a href={url} download className="mt-4 flex items-center justify-center gap-2 text-[13px] text-white/55 hover:text-white transition-colors">
+        <IDownload size={14}/> Download MP4
+      </a>
+    </div>
+  </div>
+);
+
+const ReelCard = ({ t, live, onSelect, onExpand, videoUrl, renderError }: {
+  t: TemplateConfig; live: boolean; onSelect: () => void; onExpand?: () => void; videoUrl?: string; renderError?: string;
+}) => (
+  <div className={`group relative rounded-2xl z-0 ${live ? 'live-border' : ''}`}>
+    <div className={`relative rounded-2xl overflow-hidden border ${live ? 'border-transparent' : 'border-line'} bg-card card-hover`}>
+      <div className="relative aspect-[9/13]">
+        {videoUrl ? (
+          <video src={videoUrl} autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover"/>
+        ) : renderError ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-rose/10 p-4">
+            <span className="text-rose text-[11.5px] font-mono text-center leading-relaxed">{renderError}</span>
+          </div>
+        ) : (
+          <>
+            <div className={`absolute inset-0 bg-gradient-to-br ${t.bg}`}/>
+            <div className="absolute inset-0 stripes-a opacity-25"/>
+            <div className="absolute inset-0 scanlines opacity-40"/>
+            {live && <div className="absolute inset-0 stage-sweep"/>}
+          </>
+        )}
+        <div className="absolute inset-0 grid place-items-center">
+          <button onClick={videoUrl && onExpand ? onExpand : onSelect} aria-label="Play"
+            className={`relative w-14 h-14 rounded-full grid place-items-center transition-transform group-hover:scale-105 ring-1 ring-white/15 ${live ? 'bg-white text-ink' : 'bg-white/10 backdrop-blur text-white border border-white/20'}`}>
+            {videoUrl ? <IPlay size={18} className="translate-x-[1px]"/> : live ? <IPause size={18}/> : <IPlay size={18} className="translate-x-[1px]"/>}
+            {live && <span className="absolute -inset-1 rounded-full bg-white/20 blur-md -z-10"/>}
+          </button>
+        </div>
+        <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/45 backdrop-blur border border-white/10 text-[10.5px] font-mono uppercase tracking-[0.18em] text-white/85">
+            {t.label}
+          </span>
+          {live && (
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-rose/20 border border-rose/40 text-[10.5px] font-mono uppercase tracking-[0.18em] text-rose">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose animate-pulse"/>live
+            </span>
+          )}
+        </div>
+        <div className="absolute inset-x-3 bottom-3">
+          <div className="flex items-center gap-2 text-[11px] font-mono text-white/75">
+            <span>00:00</span>
+            <div className="flex-1 h-1 rounded-full bg-white/15 overflow-hidden">
+              <div className="h-full bg-white/85" style={{ width: live ? '32%' : '0%' }}/>
+            </div>
+            <span className="text-white/45">{t.duration}</span>
+          </div>
+        </div>
+      </div>
+      <div className="p-4 sm:p-5 border-t border-line">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="font-display text-[15px] font-semibold text-white tracking-tight">{t.label}</div>
+            <div className="mt-1 text-[12.5px] text-white/55">{t.tagline}</div>
+          </div>
+          <div className="flex items-center gap-1">
+            {t.palette.map((c,i) => <span key={i} className="w-3 h-3 rounded-full border border-white/15" style={{ backgroundColor: c }}/>)}
+          </div>
+        </div>
+        <div className="mt-3 text-[11.5px] font-mono text-white/40">VOICE · {t.voice}</div>
+        <div className="mt-4 flex items-center gap-2">
+          <button className="flex-1 inline-flex items-center justify-center gap-1.5 bg-brand hover:bg-brand-hover text-white text-[13px] font-medium px-3 py-2.5 rounded-lg shadow-glow-sm ring-1 ring-brand/40 transition-all">
+            <ICheck size={14}/> Use this one
+          </button>
+          {videoUrl ? (
+            <a href={videoUrl} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 text-[13px] text-white/85 hover:text-white px-3 py-2.5 rounded-lg border border-line hover:border-line2 transition-colors">
+              <IDownload size={14}/> MP4
+            </a>
+          ) : (
+            <button className="inline-flex items-center justify-center gap-1.5 text-[13px] text-white/85 hover:text-white px-3 py-2.5 rounded-lg border border-line hover:border-line2 transition-colors">
+              <IDownload size={14}/> MP4
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const DemoPicker = ({ activeReel, setActiveReel, onAgain, videoUrls, renderErrors, onExpand }: {
+  activeReel: string; setActiveReel: (id: string) => void; onAgain: () => void;
+  videoUrls: string[]; renderErrors: string[]; onExpand: (url: string) => void;
+}) => (
+  <div className="p-6 sm:p-8">
+    <div className="flex items-end justify-between gap-4 flex-wrap">
+      <div>
+        <div className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-[0.2em] text-ok/90">
+          <ICheck size={12}/> Render complete · 3 cuts ready
+        </div>
+        <h3 className="mt-2 font-display text-2xl sm:text-3xl font-semibold text-white tracking-tight">Pick your favorite, or describe your own.</h3>
+      </div>
+      <div className="flex items-center gap-2">
+        <button onClick={onAgain} className="inline-flex items-center gap-1.5 text-[12.5px] text-white/65 hover:text-white px-3 py-2 rounded-md border border-line hover:border-line2">
+          <IRefresh size={13}/> Run again
+        </button>
+        <a href="#chat" className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-white px-3 py-2 rounded-md bg-violet/15 border border-violet/40 hover:bg-violet/25 transition-colors">
+          <IMessage size={13}/> None of these? Describe your vision <IArrow size={13}/>
+        </a>
+      </div>
+    </div>
+    <div className="mt-6 grid gap-5 md:grid-cols-3">
+      {TEMPLATES.map((t, i) => (
+        <ReelCard key={t.id} t={t} live={activeReel===t.id} onSelect={() => setActiveReel(t.id)}
+          onExpand={videoUrls[i] ? () => onExpand(videoUrls[i]) : undefined}
+          videoUrl={videoUrls[i] || undefined}
+          renderError={renderErrors[i] || undefined}/>
+      ))}
+    </div>
+    <div className="mt-6 grid sm:grid-cols-3 gap-3 text-[12.5px]">
+      <MetaPill k="Source"   v="1 product · 5 photos"/>
+      <MetaPill k="Pipeline" v="Gemini → Shotstack → MP4"/>
+      <MetaPill k="Output"   v="1080p · 20s · MP4"/>
+    </div>
+  </div>
+);
+
+const DemoStepper = ({ step, onJump }: { step: DemoStep; onJump: (s: DemoStep) => void }) => (
+  <div className="inline-flex items-center gap-1 p-1 rounded-xl border border-line bg-panel">
+    {(['input','rendering','picker'] as DemoStep[]).map((id,i) => (
+      <button key={id} type="button" onClick={() => onJump(id)}
+        className={`px-3 py-1.5 rounded-lg text-[12.5px] font-mono transition-colors ${step===id ? 'bg-brand/15 text-white border border-brand/40' : 'text-white/55 hover:text-white border border-transparent'}`}>
+        {String.fromCharCode(65+i)} · {id.charAt(0).toUpperCase()+id.slice(1)}
+      </button>
+    ))}
+  </div>
+);
+
+const DemoSection = () => {
+  const [step, setStep]             = useState<DemoStep>('input');
+  const [apiKey, setApiKey]         = useState('');
+  const [showKey, setShowKey]       = useState(false);
+  const [progress, setProgress]     = useState([0,0,0]);
+  const [elapsed, setElapsed]       = useState(0);
+  const [activeReel, setActiveReel] = useState('darkLuxury');
+  const [videoUrls, setVideoUrls]   = useState(['','','']);
+  const [renderErrors, setRenderErrors] = useState(['','','']);
+  const [error, setError]           = useState('');
+  const [modalUrl, setModalUrl]     = useState('');
+  const pollRef  = useRef<ReturnType<typeof setInterval>|null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval>|null>(null);
+
+  const stopAll = () => {
+    if (pollRef.current)  { clearInterval(pollRef.current);  pollRef.current  = null; }
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  };
+
+  useEffect(() => () => stopAll(), []);
+
+  const start = async () => {
+    stopAll();
+    setStep('rendering'); setProgress([0,0,0]); setElapsed(0); setError('');
+    setVideoUrls(['','','']); setRenderErrors(['','','']);
+    const t0 = Date.now();
+    timerRef.current = setInterval(() => setElapsed((Date.now()-t0)/1000), 100);
 
     try {
-      const res = await fetch('/api/simulate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ geminiKey: geminiKey.trim() || undefined }),
+      const res  = await fetch('/api/simulate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ geminiKey: apiKey.trim() || undefined }),
       });
       const data = await res.json();
+      if (!res.ok || !data.renderIds) throw new Error(data.error || 'Failed to start render');
 
-      if (!res.ok || !data.renderId) {
-        throw new Error(data.error || 'Failed to start render');
-      }
+      const ids: string[] = data.renderIds;
 
-      setDemoState('rendering');
-      startPolling(data.renderId);
+      pollRef.current = setInterval(async () => {
+        try {
+          const results = await Promise.allSettled(
+            ids.map(id => fetch(`/api/status/${id}`).then(r => r.json()))
+          );
+
+          setProgress(results.map(r =>
+            r.status === 'fulfilled' ? (STATUS_PROGRESS[r.value.status] ?? 5) : 5
+          ));
+
+          const allSettled = results.every(r =>
+            r.status === 'fulfilled' && (r.value.status === 'done' || r.value.status === 'failed')
+          );
+
+          if (allSettled) {
+            const newUrls = results.map(r =>
+              r.status === 'fulfilled' && r.value.status === 'done' ? (r.value.url ?? '') : ''
+            );
+            const newErrors = results.map(r => {
+              if (r.status !== 'fulfilled' || r.value.status !== 'failed') return '';
+              const e = r.value.error;
+              return typeof e === 'object' ? (e as {message?:string})?.message || 'Render failed' : e || 'Render failed';
+            });
+            stopAll(); setVideoUrls(newUrls); setRenderErrors(newErrors); setStep('picker');
+          }
+        } catch { /* keep polling */ }
+      }, 3000);
     } catch (err) {
-      setDemoState('error');
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      stopAll(); setError(err instanceof Error ? err.message : String(err)); setStep('input');
     }
-  }
+  };
 
-  function startPolling(renderId: string) {
-    const startTime = Date.now();
-
-    timerRef.current = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTime) / 1000));
-    }, 1000);
-
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/status/${renderId}`);
-        const data = await res.json();
-        setRenderStatus(data.status);
-
-        if (data.status === 'done' && data.url) {
-          stopPolling();
-          setVideoUrl(data.url);
-          setDemoState('done');
-        } else if (data.status === 'failed') {
-          stopPolling();
-          setDemoState('error');
-          setErrorMsg(typeof data.error === 'object' ? (data.error as { message?: string })?.message || 'Render failed' : data.error || 'Render failed');
-        }
-      } catch {
-        // transient network error — keep polling
-      }
-    }, 3000);
-  }
+  const reset = () => { stopAll(); setStep('input'); setProgress([0,0,0]); setElapsed(0); setVideoUrls(['','','']); setRenderErrors(['','','']); setError(''); };
+  const handleJump = (s: DemoStep) => { stopAll(); setStep(s); if (s==='rendering') { setProgress([18,42,8]); setElapsed(2.4); } };
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white">
-      {/* Hero */}
-      <section className="relative overflow-hidden px-6 py-24 text-center">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/30 via-gray-950 to-gray-950 pointer-events-none" />
-        <div className="relative max-w-4xl mx-auto">
-          <span className="inline-block mb-4 px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 text-sm font-medium tracking-wide">
-            Powered by Shotstack + Gemini AI
-          </span>
-          <h1 className="text-5xl sm:text-6xl font-extrabold leading-tight mb-6">
-            Every product you upload<br />
-            <span className="text-blue-400">gets a video. Automatically.</span>
-          </h1>
-          <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-10">
-            Connect your Shopify store once. Every new product triggers an AI-generated
-            advertising video — professional voiceover, lifestyle background, animated text —
-            delivered in under 2 minutes.
-          </p>
-          <a
-            href="#demo"
-            className="inline-block px-8 py-4 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-lg transition-colors"
-          >
-            Try the demo →
+    <>
+    <section id="demo" className="relative border-t border-line">
+      <div className="absolute inset-0 pointer-events-none"
+           style={{ background: 'radial-gradient(60% 50% at 50% 0%,rgba(61,123,255,0.18),transparent 60%),radial-gradient(40% 40% at 80% 30%,rgba(124,92,255,0.12),transparent 60%)' }}/>
+      <div className="relative max-w-6xl mx-auto px-6 py-20 sm:py-28">
+        <div className="flex items-end justify-between gap-6 flex-wrap">
+          <div>
+            <SectionEyebrow icon={<IBolt size={12}/>}>Live demo</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white max-w-3xl">
+              Watch one product become <span className="text-gradient">three finished ads</span>.
+            </h2>
+            <p className="mt-4 text-white/55 max-w-xl">We&apos;ll simulate a real Shopify run end-to-end. Three templates, in parallel, in real time.</p>
+          </div>
+          <DemoStepper step={step} onJump={handleJump}/>
+        </div>
+        <div className="relative mt-10">
+          <div className="absolute -inset-1 rounded-[28px] pointer-events-none"
+               style={{ background: 'radial-gradient(60% 60% at 50% 50%,rgba(61,123,255,0.22),transparent 70%)', filter: 'blur(40px)' }}/>
+          <div className="relative rounded-2xl border border-brand/30 bg-card overflow-hidden shadow-[0_0_60px_rgba(61,123,255,0.18)]">
+            <div className="px-4 h-10 border-b border-line bg-[#0A0B10] flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+              <span className="ml-2 font-mono text-[11px] text-white/40">productreel · /demo</span>
+              <span className="ml-auto inline-flex items-center gap-2 font-mono text-[10.5px] text-white/40">
+                <span className="w-1.5 h-1.5 rounded-full bg-ok"/>POST /api/simulate
+              </span>
+            </div>
+            {step==='input'     && <DemoInput apiKey={apiKey} setApiKey={setApiKey} showKey={showKey} setShowKey={setShowKey} onStart={start} error={error}/>}
+            {step==='rendering' && <DemoRendering progress={progress} elapsed={elapsed} onCancel={reset}/>}
+            {step==='picker'    && <DemoPicker activeReel={activeReel} setActiveReel={setActiveReel} onAgain={reset} videoUrls={videoUrls} renderErrors={renderErrors} onExpand={setModalUrl}/>}
+          </div>
+        </div>
+      </div>
+    </section>
+    {modalUrl && <VideoModal url={modalUrl} onClose={() => setModalUrl('')}/>}
+    </>
+  );
+};
+
+// ── AI DIRECTOR CHAT ───────────────────────────────────────────
+interface ChatMessage { role: 'ai'|'user'; body: string; }
+
+const INITIAL_MESSAGES: ChatMessage[] = [
+  { role: 'ai',   body: "Tell me how you want your video to look and feel. What's the vibe? Bold and energetic? Calm and premium? Funny?" },
+  { role: 'user', body: "I want something dark and cinematic with a luxury feel — slow-motion product shots, deep voiceover, almost like a fragrance ad." },
+  { role: 'ai',   body: "Got it — moody luxury, deep grain, slow camera, low-end voice, gold accents. I'll keep the product center-frame and let the silence breathe. Hit Generate when you're ready." },
+];
+
+const Tag = ({ children }: { children: ReactNode }) => (
+  <span className="px-1.5 py-0.5 rounded bg-violet/15 border border-violet/30 text-violet-soft normal-case tracking-normal">#{children}</span>
+);
+
+const ChatBubble = ({ role, body }: ChatMessage) => {
+  const isAi = role==='ai';
+  return (
+    <div className={`flex gap-3 ${isAi ? '' : 'flex-row-reverse'}`}>
+      <div className={`shrink-0 w-8 h-8 rounded-lg grid place-items-center ${isAi ? 'bg-gradient-to-br from-violet to-brand' : 'bg-white/10 border border-white/15'}`}>
+        {isAi ? <ISpark size={14}/> : <span className="text-[11px] font-mono text-white/80">you</span>}
+      </div>
+      <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed ${isAi ? 'bg-[#16122B] border border-violet/30 text-white/90 rounded-tl-md' : 'bg-white/95 text-ink rounded-tr-md'}`}>
+        {body}
+      </div>
+    </div>
+  );
+};
+
+const ThinkingBubble = () => (
+  <div className="flex gap-3">
+    <div className="shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-violet to-brand grid place-items-center"><ISpark size={14}/></div>
+    <div className="rounded-2xl px-4 py-3 bg-[#16122B] border border-violet/30 rounded-tl-md inline-flex items-center gap-1.5">
+      {[0,120,240].map(d => <span key={d} className="w-1.5 h-1.5 rounded-full bg-violet-soft animate-bounce" style={{ animationDelay: `${d}ms` }}/>)}
+    </div>
+  </div>
+);
+
+const ChatSection = () => {
+  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+  const [input, setInput]       = useState('');
+  const [thinking, setThinking] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const ready = messages[messages.length-1]?.role==='ai' && messages.length>=3;
+
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, thinking]);
+
+  const send = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const v = input.trim(); if (!v) return;
+    setMessages(m => [...m, { role: 'user', body: v }]);
+    setInput(''); setThinking(true);
+    setTimeout(() => {
+      setMessages(m => [...m, { role: 'ai', body: 'Locked in. Adjusting palette and pacing toward that direction. Ready when you are.' }]);
+      setThinking(false);
+    }, 1200);
+  };
+
+  return (
+    <section id="chat" className="relative border-t border-line chat-surface">
+      <div className="absolute inset-0 chat-grid pointer-events-none"/>
+      <div className="relative max-w-6xl mx-auto px-6 py-20 sm:py-28">
+        <div className="grid lg:grid-cols-[1.1fr_1.4fr] gap-10 items-start">
+          <div className="lg:sticky lg:top-24">
+            <SectionEyebrow icon={<IMessage size={12}/>}>AI Director</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white">
+              None of the templates feel right?{' '}
+              <span className="text-gradient-violet">Just describe it.</span>
+            </h2>
+            <p className="mt-4 text-white/60 max-w-md">
+              Tell the Director the mood, pace, and palette you have in mind. Plain language — no template jargon. We&apos;ll re-cut your video to match.
+            </p>
+            <ul className="mt-6 space-y-2 text-[13.5px] text-white/65">
+              {['Talk like you would to a creative producer.','Reference moods, films, or feelings — not effects.','One brief, one re-render. Iterate freely.'].map(x => (
+                <li key={x} className="flex items-start gap-2"><ICheck size={14} className="text-violet-soft mt-0.5"/> {x}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="relative">
+            <div className="absolute -inset-2 rounded-[28px] pointer-events-none"
+                 style={{ background: 'radial-gradient(60% 60% at 30% 30%,rgba(124,92,255,0.30),transparent 70%)', filter: 'blur(40px)' }}/>
+            <div className="relative rounded-2xl border border-violet/30 bg-[#0F0D1A]/90 backdrop-blur shadow-violet overflow-hidden">
+              <div className="px-4 h-11 border-b border-violet/20 flex items-center gap-2 bg-[#0B091A]">
+                <span className="w-7 h-7 rounded-md bg-gradient-to-br from-violet to-brand grid place-items-center"><ISpark size={13}/></span>
+                <div className="leading-tight">
+                  <div className="font-display text-[13.5px] font-semibold text-white">Director</div>
+                  <div className="font-mono text-[10.5px] text-violet-soft/80 inline-flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-ok"/>online · gemini-2.0-flash
+                  </div>
+                </div>
+                <span className="ml-auto font-mono text-[10.5px] text-white/35">/api/director</span>
+              </div>
+              <div ref={scrollRef} className="px-4 sm:px-6 py-6 max-h-[440px] overflow-y-auto space-y-4">
+                {messages.map((m,i) => <ChatBubble key={i} {...m}/>)}
+                {thinking && <ThinkingBubble/>}
+              </div>
+              <form onSubmit={send} className="px-3 sm:px-4 py-3 border-t border-violet/20 bg-[#0B091A]">
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 rounded-xl bg-[#13102a] border border-violet/30 focus-within:border-violet/60 transition-colors">
+                    <textarea rows={1} value={input} onChange={e => setInput(e.target.value)}
+                      onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+                      placeholder="Describe the mood, pacing, palette..."
+                      className="w-full bg-transparent text-[14px] text-white placeholder:text-white/35 px-3.5 py-3 outline-none resize-none"/>
+                    <div className="flex items-center justify-between px-3 pb-2 text-[11px] font-mono text-white/35">
+                      <div className="inline-flex items-center gap-3"><Tag>moody</Tag><Tag>cinematic</Tag><Tag>slow-motion</Tag></div>
+                      <span>↵ to send · ⇧↵ for newline</span>
+                    </div>
+                  </div>
+                  <button type="submit"
+                    className="h-11 px-3.5 rounded-xl bg-violet hover:bg-violet-soft hover:text-violet-deep text-white inline-flex items-center gap-2 ring-1 ring-violet/40 shadow-violet transition-colors">
+                    <ISend size={15}/>
+                  </button>
+                </div>
+              </form>
+              {ready && (
+                <div className="px-4 sm:px-6 pb-5 -mt-1">
+                  <button className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-violet to-brand hover:brightness-110 text-white text-[14px] font-medium px-4 py-3 rounded-xl shadow-violet ring-1 ring-violet/40 transition-all">
+                    <ISpark size={16}/> Generate custom video <IArrow size={16}/>
+                  </button>
+                  <div className="mt-2 text-center text-[11.5px] font-mono text-white/40">approx 22s · single cut · matches your brief</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ── SETUP ──────────────────────────────────────────────────────
+interface SetupStepData { n: string; I: IconFC; title: string; body: string; kind: 'cmd'|'url'|'note'; code: string; }
+
+const SetupStepCard = ({ s: { n, I, title, body, kind, code } }: { s: SetupStepData }) => (
+  <div className="rounded-2xl border border-line bg-card overflow-hidden card-hover">
+    <div className="p-6 sm:p-7">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[11px] tracking-widest text-white/35">{n}</span>
+        <div className="w-9 h-9 rounded-lg border border-line bg-[#0E0F14] grid place-items-center text-brand-soft"><I size={17}/></div>
+      </div>
+      <h3 className="mt-7 font-display text-lg font-semibold text-white tracking-tight">{title}</h3>
+      <p className="mt-2 text-[14px] leading-relaxed text-white/55">{body}</p>
+    </div>
+    <div className="border-t border-line bg-[#0a0b10] px-4 py-3 flex items-center gap-2">
+      <span className="font-mono text-[11px] text-white/35">{kind==='cmd'?'$':kind==='url'?'GET':'//'}</span>
+      <code className="flex-1 font-mono text-[12px] text-white/80 truncate">{code}</code>
+      <button className="text-white/40 hover:text-white p-1 rounded-md hover:bg-white/5"><ICopy size={13}/></button>
+    </div>
+  </div>
+);
+
+const SetupSection = () => {
+  const steps: SetupStepData[] = [
+    { n:'01', I:ICloud,  title:'Deploy to Vercel',
+      body:'One click. We provision Shotstack and Gemini env vars and ship a webhook endpoint.',
+      kind:'cmd', code:'npx productreel deploy --target vercel' },
+    { n:'02', I:ILink,   title:'Add the Shopify webhook',
+      body:'Paste the generated URL into Shopify · Settings · Notifications · Webhooks.',
+      kind:'url', code:'https://yourstore.productreel.app/api/hooks/product-created' },
+    { n:'03', I:ISpark,  title:'Watch the magic',
+      body:'Add a product. Three videos arrive in your inbox before the listing finishes saving.',
+      kind:'note', code:'avg time-to-inbox · 47 seconds' },
+  ];
+  return (
+    <section id="setup" className="border-t border-line">
+      <div className="max-w-6xl mx-auto px-6 py-20 sm:py-28">
+        <div className="flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <SectionEyebrow icon={<ITerminal size={12}/>}>Setup</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white max-w-3xl">Three minutes from clone to live.</h2>
+          </div>
+          <a href="#" className="inline-flex items-center gap-2 text-[13px] text-white/70 hover:text-white px-3 py-2 rounded-lg border border-line hover:border-line2">
+            <IBook size={14}/> Read the docs <IArrow size={13}/>
           </a>
         </div>
-      </section>
+        <div className="mt-10 grid gap-5 md:grid-cols-3">
+          {steps.map(s => <SetupStepCard key={s.n} s={s}/>)}
+        </div>
+      </div>
+    </section>
+  );
+};
 
-      {/* How it works */}
-      <section className="px-6 py-20 bg-gray-900">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-14">How it works</h2>
-          <div className="grid sm:grid-cols-3 gap-8">
-            {[
-              {
-                step: '01',
-                title: 'Upload your product',
-                desc: 'Add a product to Shopify as you normally would. ProductReel listens via webhook — nothing extra needed.',
-              },
-              {
-                step: '02',
-                title: 'AI generates the video',
-                desc: 'Gemini analyzes your product images and writes the ad script. Shotstack renders the MP4 with TTS voiceover, lifestyle background, and animated text.',
-              },
-              {
-                step: '03',
-                title: 'Video is ready',
-                desc: 'Your professional 20-second product ad is ready to download and share on any platform.',
-              },
-            ].map(({ step, title, desc }) => (
-              <div key={step} className="flex flex-col gap-3">
-                <span className="text-4xl font-black text-blue-500/40">{step}</span>
-                <h3 className="text-lg font-bold">{title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">{desc}</p>
+// ── WAITLIST ───────────────────────────────────────────────────
+const Waitlist = () => {
+  const [email, setEmail]         = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const submit = (e: React.FormEvent) => { e.preventDefault(); if (!email.includes('@')) return; setSubmitted(true); setEmail(''); };
+  return (
+    <section id="waitlist" className="border-t border-line">
+      <div className="max-w-6xl mx-auto px-6 py-20 sm:py-28">
+        <div className="relative overflow-hidden rounded-3xl border border-line bg-card px-6 sm:px-12 py-14 sm:py-20 text-center">
+          <div className="absolute inset-0 pointer-events-none"
+               style={{ background: 'radial-gradient(60% 80% at 50% 0%,rgba(61,123,255,0.22),transparent 60%),radial-gradient(40% 60% at 50% 100%,rgba(124,92,255,0.20),transparent 60%)' }}/>
+          <div className="relative">
+            <SectionEyebrow icon={<IMoon size={12}/>}>Early access</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white max-w-3xl mx-auto">
+              The next product you upload could come with a video.
+            </h2>
+            <p className="mt-4 text-white/55 max-w-xl mx-auto">First 10 videos are free. We&apos;ll email you the moment your store is in.</p>
+            {!submitted ? (
+              <form onSubmit={submit} className="mt-8 mx-auto max-w-md flex flex-col sm:flex-row items-stretch gap-2">
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@store.com"
+                       className="flex-1 bg-[#0E0F14] border border-line focus:border-brand/60 focus-ring text-sm text-white placeholder:text-white/30 px-4 py-3 rounded-lg transition-colors"/>
+                <button type="submit" className="bg-brand hover:bg-brand-hover text-white text-sm font-medium px-5 py-3 rounded-lg shadow-glow-sm hover:shadow-glow ring-1 ring-brand/40 transition-all whitespace-nowrap">
+                  Notify me
+                </button>
+              </form>
+            ) : (
+              <div className="mt-8 inline-flex items-center gap-2 rounded-lg border border-ok/40 bg-ok/10 text-ok px-4 py-3 text-sm">
+                <ICheck size={15}/> You&apos;re on the list. We&apos;ll be in touch.
               </div>
-            ))}
+            )}
+            <div className="mt-4 text-[12px] text-white/40 font-mono">no credit card · cancel anytime · 100% built on Shotstack</div>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
+  );
+};
 
-      {/* Live demo */}
-      <section id="demo" className="px-6 py-20">
-        <div className="max-w-2xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-4">Try the demo</h2>
-          <p className="text-gray-400 text-center mb-10">
-            Generates a real Air Jordan 1 product video end-to-end. Takes ~60 seconds.
-          </p>
+// ── FOOTER ─────────────────────────────────────────────────────
+const FooterCol = ({ title, items }: { title: string; items: string[] }) => (
+  <div>
+    <div className="text-[12px] font-mono uppercase tracking-widest text-white/35">{title}</div>
+    <ul className="mt-3 space-y-2">
+      {items.map(x => <li key={x}><a href="#" className="text-[13px] text-white/70 hover:text-white transition-colors">{x}</a></li>)}
+    </ul>
+  </div>
+);
 
-          <div className="bg-gray-900 rounded-2xl p-8 flex flex-col gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Gemini API Key{' '}
-                <span className="text-gray-500 font-normal">(optional if set server-side)</span>
-              </label>
-              <input
-                type="password"
-                placeholder="AIza..."
-                value={geminiKey}
-                onChange={(e) => setGeminiKey(e.target.value)}
-                disabled={demoState === 'submitting' || demoState === 'rendering'}
-                className="w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50"
-              />
-            </div>
-
-            <button
-              onClick={handleDemo}
-              disabled={demoState === 'submitting' || demoState === 'rendering'}
-              className="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-bold text-lg transition-colors"
-            >
-              {demoState === 'submitting' && 'Starting pipeline...'}
-              {demoState === 'rendering' && `Rendering... ${elapsed}s`}
-              {(demoState === 'idle' || demoState === 'done' || demoState === 'error') &&
-                'Generate demo video'}
-            </button>
-
-            {demoState === 'rendering' && (
-              <div className="flex flex-col gap-3">
-                <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
-                  <div
-                    className="h-2 bg-blue-500 rounded-full transition-all duration-1000"
-                    style={{ width: `${Math.min((elapsed / 90) * 100, 95)}%` }}
-                  />
-                </div>
-                <p className="text-sm text-gray-400 text-center">
-                  {STATUS_LABELS[renderStatus] ?? 'Processing...'} — {elapsed}s elapsed
-                </p>
-              </div>
-            )}
-
-            {demoState === 'done' && videoUrl && (
-              <div className="flex flex-col gap-4">
-                <video
-                  src={videoUrl}
-                  controls
-                  autoPlay
-                  className="w-full rounded-xl bg-black"
-                />
-                <a
-                  href={videoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-center py-3 rounded-xl border border-blue-500 text-blue-400 hover:bg-blue-500/10 transition-colors font-medium"
-                >
-                  Download MP4 ↗
-                </a>
-              </div>
-            )}
-
-            {demoState === 'error' && errorMsg && (
-              <div className="px-4 py-3 rounded-xl bg-red-900/40 border border-red-700 text-red-300 text-sm">
-                {errorMsg}
-              </div>
-            )}
-          </div>
+const Footer = () => (
+  <footer className="border-t border-line">
+    <div className="max-w-6xl mx-auto px-6 py-10 grid gap-6 md:grid-cols-3 items-start">
+      <div>
+        <div className="flex items-center gap-2">
+          <span className="w-6 h-6 rounded-md bg-gradient-to-br from-brand to-violet grid place-items-center"><IPlay size={11} className="translate-x-[1px]"/></span>
+          <span className="font-display text-[15px] font-semibold tracking-tight">ProductReel</span>
         </div>
-      </section>
-
-      {/* Setup instructions */}
-      <section className="px-6 py-20 bg-gray-900">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-14">
-            Connect your Shopify store in 3 minutes
-          </h2>
-          <ol className="flex flex-col gap-8">
-            {[
-              {
-                n: 1,
-                title: 'Deploy ProductReel to Vercel',
-                body: 'Fork this repo, click Deploy to Vercel, and set your environment variables: SHOTSTACK_API_KEY and GEMINI_API_KEY.',
-              },
-              {
-                n: 2,
-                title: 'Add the webhook in Shopify',
-                body: 'Go to Shopify Admin → Settings → Notifications → Webhooks → Create webhook. Select "Product creation" and enter your Vercel URL: https://your-app.vercel.app/api/webhook',
-              },
-              {
-                n: 3,
-                title: 'Upload a product and watch the magic',
-                body: 'Add any product to your Shopify store. Within 2 minutes a professional advertising video is generated automatically.',
-              },
-            ].map(({ n, title, body }) => (
-              <li key={n} className="flex gap-6">
-                <span className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">
-                  {n}
-                </span>
-                <div>
-                  <h3 className="font-semibold mb-1">{title}</h3>
-                  <p className="text-gray-400 text-sm leading-relaxed">{body}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
+        <p className="mt-3 text-[13px] text-white/50 max-w-xs">AI video ads for Shopify, on autopilot. Built on Shotstack &amp; Gemini.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-6">
+        <FooterCol title="Product" items={['Demo','Templates','AI Director','Pricing']}/>
+        <FooterCol title="Company" items={['Docs','GitHub','Changelog','Contact']}/>
+      </div>
+      <div className="md:text-right">
+        <div className="text-[12px] font-mono uppercase tracking-widest text-white/35">Status</div>
+        <div className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] text-white/70">
+          <span className="w-1.5 h-1.5 rounded-full bg-ok animate-pulse"/> All systems operational
         </div>
-      </section>
-
-      {/* Early access CTA */}
-      <section className="px-6 py-24 text-center">
-        <div className="max-w-xl mx-auto">
-          <h2 className="text-3xl font-bold mb-4">Get early access</h2>
-          <p className="text-gray-400 mb-8">
-            Be the first to know when ProductReel launches on the Shopify App Store.
-          </p>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const input = e.currentTarget.elements.namedItem('email') as HTMLInputElement;
-              if (input.value) {
-                input.value = '';
-                alert("Thanks! We'll be in touch.");
-              }
-            }}
-            className="flex gap-3"
-          >
-            <input
-              name="email"
-              type="email"
-              required
-              placeholder="your@email.com"
-              className="flex-1 px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
-            />
-            <button
-              type="submit"
-              className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold transition-colors"
-            >
-              Notify me
-            </button>
-          </form>
+        <div className="mt-3 inline-flex items-center gap-3 text-white/55 text-[13px]">
+          <a href="#" className="hover:text-white inline-flex items-center gap-1.5"><IGithub size={14}/> GitHub</a>
         </div>
-      </section>
+      </div>
+    </div>
+    <div className="border-t border-line">
+      <div className="max-w-6xl mx-auto px-6 py-5 text-[12px] text-white/35 flex items-center justify-between flex-wrap gap-2">
+        <span>© 2026 ProductReel</span>
+        <span className="font-mono">v0.1 · early access</span>
+      </div>
+    </div>
+  </footer>
+);
 
-      <footer className="px-6 py-8 border-t border-gray-800 text-center text-gray-600 text-sm">
-        ProductReel — Automated product videos for Shopify merchants
-      </footer>
-    </main>
+// ── PAGE ───────────────────────────────────────────────────────
+export default function Home() {
+  return (
+    <div className="min-h-screen bg-ink text-white">
+      <Navbar/>
+      <main>
+        <Hero/>
+        <HowItWorks/>
+        <DemoSection/>
+        <ChatSection/>
+        <SetupSection/>
+        <Waitlist/>
+      </main>
+      <Footer/>
+    </div>
   );
 }
