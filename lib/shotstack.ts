@@ -31,41 +31,22 @@ function normalizeImageUrl(url: string): string {
   return url;
 }
 
-export function buildRenderPayload(product: ProductInput, analysis: GeminiAnalysis) {
-  const images = product.images.slice(0, 3).map(normalizeImageUrl);
+export function buildRenderPayload(
+  product: ProductInput,
+  analysis: GeminiAnalysis,
+  audioUrl?: string,
+) {
+  const images = product.images.slice(0, 5).map(normalizeImageUrl);
   const totalDuration = 20;
 
+  // Product images fill the full frame — the product IS the hero, no random AI background
   const imageClips = buildImageClips(images, totalDuration);
 
-  const backgroundClip: ShotstackClip = {
-    asset: {
-      type: 'text-to-image',
-      prompt: analysis.background_prompt,
-      width: 1280,
-      height: 768,
-    },
-    start: 0,
-    length: totalDuration,
-    effect: 'zoomIn',
-    transition: { in: 'fade', out: 'fade' },
-  };
-
-  const voiceoverClip: ShotstackClip = {
-    asset: {
-      type: 'text-to-speech',
-      text: analysis.voiceover,
-      voice: 'Joanna',
-      newscaster: true,
-    },
-    start: 0,
-    length: totalDuration,
-  };
-
-  // Gradient overlay — darkens the left 60% for text readability, right stays lighter for product
+  // Top and bottom gradient bands keep text readable against any product image
   const overlayClip: ShotstackClip = {
     asset: {
       type: 'html',
-      html: `<div style="width:1280px;height:720px;background:linear-gradient(to right,rgba(0,0,0,0.72) 0%,rgba(0,0,0,0.45) 55%,rgba(0,0,0,0.1) 100%);"></div>`,
+      html: `<div style="width:1280px;height:720px;background:linear-gradient(to bottom,rgba(0,0,0,0.78) 0%,rgba(0,0,0,0.1) 38%,rgba(0,0,0,0.1) 58%,rgba(0,0,0,0.88) 100%);"></div>`,
       width: 1280,
       height: 720,
     },
@@ -73,47 +54,64 @@ export function buildRenderPayload(product: ProductInput, analysis: GeminiAnalys
     length: totalDuration,
   };
 
+  const voiceoverClip: ShotstackClip = audioUrl
+    ? {
+        asset: { type: 'audio', src: audioUrl, volume: 1 },
+        start: 0,
+        length: totalDuration,
+      }
+    : {
+        asset: {
+          type: 'text-to-speech',
+          text: analysis.voiceover,
+          voice: 'Matthew',
+          newscaster: true,
+        },
+        start: 0,
+        length: totalDuration,
+      };
+
   const textClips: ShotstackClip[] = [
-    // Title — top left
+    // Title — top left, sits over the darkest part of the gradient
     {
       asset: {
         type: 'html',
-        html: `<p style="font-family:'Arial Black',Arial,sans-serif;font-size:46px;font-weight:900;color:#ffffff;text-shadow:0 2px 12px rgba(0,0,0,0.9);margin:0;line-height:1.15;">${product.title}</p>`,
-        width: 660,
-        height: 130,
+        html: `<p style="font-family:'Arial Black',Arial,sans-serif;font-size:48px;font-weight:900;color:#ffffff;text-shadow:0 3px 18px rgba(0,0,0,1);margin:0;text-align:left;line-height:1.15;">${product.title}</p>`,
+        width: 900,
+        height: 140,
       },
       start: 1.0,
       length: totalDuration - 1.0,
       position: 'topLeft',
-      offset: { x: 0.04, y: -0.07 },
+      offset: { x: 0.04, y: -0.05 },
       transition: { in: 'fade' },
     },
-    // Price — bottom left, appears mid-video
+    // Price — bottom left
     {
       asset: {
         type: 'html',
-        html: `<p style="font-family:Arial,sans-serif;font-size:48px;font-weight:bold;color:#ffffff;text-shadow:0 2px 8px rgba(0,0,0,0.9);margin:0;">\$${product.price}</p>`,
-        width: 300,
-        height: 80,
+        html: `<p style="font-family:'Arial Black',Arial,sans-serif;font-size:56px;font-weight:900;color:#ffffff;text-shadow:0 3px 14px rgba(0,0,0,1);margin:0;">\$${product.price}</p>`,
+        width: 320,
+        height: 90,
       },
       start: 8.0,
       length: totalDuration - 8.0,
       position: 'bottomLeft',
-      offset: { x: 0.04, y: 0.18 },
+      offset: { x: 0.05, y: 0.15 },
       transition: { in: 'fade' },
     },
-    // CTA — bottom left, below price
+    // CTA — bottom right
     {
       asset: {
         type: 'html',
-        html: `<p style="font-family:Arial,sans-serif;font-size:24px;font-weight:bold;color:#ffffff;background:#1A56DB;padding:12px 28px;border-radius:50px;margin:0;display:inline-block;">Shop Now →</p>`,
-        width: 240,
-        height: 60,
+        html: `<p style="font-family:Arial,sans-serif;font-size:26px;font-weight:bold;color:#ffffff;background:#1A56DB;padding:14px 32px;border-radius:50px;margin:0;white-space:nowrap;">Shop Now →</p>`,
+        width: 260,
+        height: 68,
       },
       start: 14.0,
       length: totalDuration - 14.0,
-      position: 'bottomLeft',
-      offset: { x: 0.04, y: 0.07 },
+      position: 'bottomRight',
+      offset: { x: -0.05, y: 0.15 },
       transition: { in: 'fade' },
     },
   ];
@@ -121,9 +119,8 @@ export function buildRenderPayload(product: ProductInput, analysis: GeminiAnalys
   const tracks: ShotstackTrack[] = [
     { clips: textClips },
     { clips: [voiceoverClip] },
-    { clips: imageClips },
     { clips: [overlayClip] },
-    { clips: [backgroundClip] },
+    { clips: imageClips },
   ];
 
   return {
@@ -138,35 +135,22 @@ export function buildRenderPayload(product: ProductInput, analysis: GeminiAnalys
   };
 }
 
+const EFFECTS = ['zoomIn', 'zoomOut', 'slideLeft', 'slideRight', 'zoomIn'] as const;
+
 function buildImageClips(images: string[], totalDuration: number): ShotstackClip[] {
   const count = images.length;
-  // Product images sit on the right side, scaled to ~45% of frame width so portrait
-  // shots aren't cropped. The right anchor + negative x-offset gives breathing room.
-  const baseClip = (src: string) => ({
+  const seg = totalDuration / count;
+
+  return images.map((src, i) => ({
     asset: { type: 'image', src },
-    scale: 0.48,
-    position: 'right' as const,
-    offset: { x: -0.03, y: 0 },
-  });
-
-  if (count === 1) {
-    return [{ ...baseClip(images[0]), start: 0, length: totalDuration, effect: 'zoomIn' }];
-  }
-
-  if (count === 2) {
-    const half = totalDuration / 2;
-    return [
-      { ...baseClip(images[0]), start: 0, length: half, effect: 'zoomIn', transition: { out: 'fade' } },
-      { ...baseClip(images[1]), start: half, length: half, effect: 'zoomOut', transition: { in: 'fade' } },
-    ];
-  }
-
-  const seg = totalDuration / 3;
-  return [
-    { ...baseClip(images[0]), start: 0, length: seg, effect: 'zoomIn', transition: { out: 'fade' } },
-    { ...baseClip(images[1]), start: seg, length: seg, effect: 'zoomIn', transition: { in: 'fade', out: 'fade' } },
-    { ...baseClip(images[2]), start: seg * 2, length: seg, effect: 'zoomOut', transition: { in: 'fade' } },
-  ];
+    start: +(i * seg).toFixed(2),
+    length: +seg.toFixed(2),
+    effect: EFFECTS[i % EFFECTS.length],
+    transition: {
+      ...(i > 0 ? { in: 'fade' } : {}),
+      ...(i < count - 1 ? { out: 'fade' } : {}),
+    },
+  }));
 }
 
 export async function submitRender(payload: ReturnType<typeof buildRenderPayload>): Promise<string> {

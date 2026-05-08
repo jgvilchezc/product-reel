@@ -12,6 +12,8 @@ const DEMO_PRODUCT: ProductInput = {
     `${BASE_URL}/nike1.jpg`,
     `${BASE_URL}/nike2.jpeg`,
     `${BASE_URL}/nike3.jpeg`,
+    `${BASE_URL}/nike4.jpeg`,
+    `${BASE_URL}/nike5.jpeg`,
   ],
 };
 
