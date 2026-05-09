@@ -26,6 +26,11 @@ Analyze the image(s) and return ONLY this JSON object (no markdown, no code fenc
 }`;
 
 async function imageUrlToInlineData(url: string): Promise<{ inline_data: { data: string; mime_type: string } }> {
+  if (url.startsWith('data:')) {
+    const [header, data] = url.split(',');
+    const mime_type = header.split(':')[1].split(';')[0];
+    return { inline_data: { data, mime_type } };
+  }
   const res = await fetch(url);
   const buffer = await res.arrayBuffer();
   const base64 = Buffer.from(buffer).toString('base64');

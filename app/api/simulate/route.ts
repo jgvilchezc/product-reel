@@ -1,22 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
-import { analyzeProduct, type ProductInput } from '../../../lib/gemini';
-import { buildRenderPayload, buildBoldEnergyPayload, buildCleanMinimalPayload, submitRender } from '../../../lib/shotstack';
+import { processProduct, type ShopifyProduct } from '../../../lib/pipeline';
 
-const DEMO_META = {
+const DEMO_PRODUCT: ShopifyProduct = {
+  id: 1,
   title: 'Nike Free Metcon 6',
   body_html:
-    'Built for the toughest training sessions. The Nike Free Metcon 6 combines flexible Free sole technology with a stable, durable upper for ultimate gym performance.',
-  price: '130',
+    '<p>Built for the toughest training sessions. The Nike Free Metcon 6 combines flexible Free sole technology with a stable, durable upper for ultimate gym performance.</p>',
+  vendor: 'Demo Store',
+  variants: [{ price: '130.00' }],
+  images: [], // filled in at request time using the public tunnel URL
 };
 
-async function resolveImageSources(): Promise<{ geminiImage: string; shotstackImages: string[] }> {
-  // Gemini reads from filesystem — works locally without a tunnel
+const DEMO_IMAGE_FILES = ['nike1.jpg', 'nike2.jpeg', 'nike3.jpeg', 'nike4.jpeg', 'nike5.jpeg'];
+
+async function resolveDemoImageSources(): Promise<{ geminiImage: string; shotstackImageUrls: string[] }> {
+  // Gemini reads from local filesystem — works without a tunnel
   const buffer = await fs.readFile(path.join(process.cwd(), 'public', 'nike1.jpg'));
   const geminiImage = `data:image/jpeg;base64,${buffer.toString('base64')}`;
 
-  // Shotstack needs public HTTPS URLs — it fetches images from its own servers during render
+  // Shotstack needs public HTTPS URLs — it fetches images from its own servers
   const baseUrl = (
     process.env.NEXT_PUBLIC_APP_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '')
@@ -25,11 +29,10 @@ async function resolveImageSources(): Promise<{ geminiImage: string; shotstackIm
   if (!baseUrl) {
     throw new Error(
       'Set NEXT_PUBLIC_APP_URL to a public URL so Shotstack can fetch images. ' +
-      'Run: cloudflare tunnel --url http://localhost:3000 and paste the URL in .env.local'
+        'Run: cloudflared tunnel --url http://localhost:3000 and paste the URL in .env.local'
     );
   }
 
-  // Quick reachability check (3s timeout)
   try {
     const check = await fetch(`${baseUrl}/nike1.jpg`, {
       method: 'HEAD',
@@ -39,28 +42,24 @@ async function resolveImageSources(): Promise<{ geminiImage: string; shotstackIm
   } catch (e) {
     throw new Error(
       `Public URL unreachable (${baseUrl}): ${e instanceof Error ? e.message : e}. ` +
-      'Restart your tunnel and update NEXT_PUBLIC_APP_URL in .env.local'
+        'Restart your tunnel and update NEXT_PUBLIC_APP_URL in .env.local'
     );
   }
 
   return {
     geminiImage,
-    shotstackImages: ['nike1.jpg', 'nike2.jpeg', 'nike3.jpeg', 'nike4.jpeg', 'nike5.jpeg'].map(
-      (f) => `${baseUrl}/${f}`
-    ),
+    shotstackImageUrls: DEMO_IMAGE_FILES.map((f) => `${baseUrl}/${f}`),
   };
 }
 
 export async function POST(req: NextRequest) {
   let geminiKey: string | undefined;
-
   try {
     const body = await req.json();
     geminiKey = body?.geminiKey;
   } catch {
     // body is optional
   }
-
   geminiKey = geminiKey || process.env.GEMINI_API_KEY;
 
   if (!geminiKey) {
@@ -71,20 +70,20 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { geminiImage, shotstackImages } = await resolveImageSources();
+    const { geminiImage, shotstackImageUrls } = await resolveDemoImageSources();
 
-    const analysis = await analyzeProduct(
-      { ...DEMO_META, images: [geminiImage] },
-      geminiKey
-    );
+    const product: ShopifyProduct = {
+      ...DEMO_PRODUCT,
+      images: shotstackImageUrls.map((src) => ({ src })),
+    };
 
-    const productInput = { ...DEMO_META, images: shotstackImages } as ProductInput;
-    const [id0, id1, id2] = await Promise.all([
-      submitRender(buildRenderPayload(productInput, analysis)),
-      submitRender(buildBoldEnergyPayload(productInput, analysis)),
-      submitRender(buildCleanMinimalPayload(productInput, analysis)),
-    ]);
-    return NextResponse.json({ success: true, renderIds: [id0, id1, id2] });
+    // Demo flow does not email — UI polls /api/status/[renderId] for each render
+    const { renderIds } = await processProduct(product, {
+      geminiKey,
+      geminiImageOverride: geminiImage,
+    });
+
+    return NextResponse.json({ success: true, renderIds });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
