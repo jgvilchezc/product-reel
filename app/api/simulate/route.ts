@@ -13,7 +13,7 @@ const DEMO_PRODUCT: ShopifyProduct = {
   images: [], // filled in at request time using the public tunnel URL
 };
 
-const DEMO_IMAGE_FILES = ['nike1.jpg', 'nike2.jpeg', 'nike3.jpeg', 'nike4.jpeg', 'nike5.jpeg'];
+const DEMO_IMAGE_FILES = ['nike1.jpg', 'nike2.avif', 'nike3.avif'];
 
 async function resolveDemoImageSources(): Promise<{ geminiImage: string; shotstackImageUrls: string[] }> {
   // Gemini reads from local filesystem — works without a tunnel

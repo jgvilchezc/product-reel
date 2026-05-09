@@ -309,8 +309,8 @@ const DemoInput = ({ apiKey, setApiKey, showKey, setShowKey, onStart, error }: {
           <div className="text-[15px] font-semibold text-white">$130</div>
         </div>
       </div>
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        {(['/nike2.jpeg', '/nike3.jpeg', '/nike4.jpeg'] as const).map((src, i) => (
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        {(['/nike2.avif', '/nike3.avif'] as const).map((src, i) => (
           <div key={i} className="aspect-square rounded-lg border border-line bg-[#0a0b10] relative overflow-hidden">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover"/>
