@@ -245,16 +245,12 @@ interface TemplateConfig {
   accent: string; bg: string; duration: string; voice: string;
 }
 
+// Bold Energy + Clean Minimal kept in shotstack.ts/pipeline.ts but hidden from the demo UI
+// while we focus on Cinematic Showcase + Shopify automation. Re-add to this array to restore.
 const TEMPLATES: TemplateConfig[] = [
   { id: 'cinematicShowcase', label: 'Cinematic Showcase', tagline: 'Kinetic typography, luma transitions, accent panels — full-frame product reveal.',
     palette: ['#000000','#d96657','#FFFFFF'], accent: 'from-rose/40 to-rose/5',
     bg: 'from-rose/20 via-rose/5 to-transparent', duration: '00:36', voice: 'Music · Cinematic' },
-  { id: 'boldEnergy',   label: 'Bold Energy',   tagline: 'High contrast, electric blue, energetic cuts.',
-    palette: ['#1A56DB','#FFFFFF','#050505'], accent: 'from-brand/60 to-brand/10',
-    bg: 'from-brand/30 via-brand/10 to-transparent', duration: '00:20', voice: 'Matthew · Energetic' },
-  { id: 'cleanMinimal', label: 'Clean Minimal', tagline: 'Editorial whitespace, restrained type, slow zooms.',
-    palette: ['#111111','#16A34A','#FAFAFA'], accent: 'from-ok/40 to-ok/5',
-    bg: 'from-ok/20 via-ok/5 to-transparent', duration: '00:20', voice: 'Joanna · Soft' },
 ];
 
 type DemoStep = 'input' | 'rendering' | 'picker';
@@ -309,8 +305,8 @@ const DemoInput = ({ apiKey, setApiKey, showKey, setShowKey, onStart, error }: {
           <div className="text-[15px] font-semibold text-white">$130</div>
         </div>
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        {(['/nike2.avif', '/nike3.avif'] as const).map((src, i) => (
+      <div className="mt-4 grid grid-cols-4 gap-2">
+        {(['/nike2.avif', '/nike3.avif', '/nike4.png', '/nike5.jpg'] as const).map((src, i) => (
           <div key={i} className="aspect-square rounded-lg border border-line bg-[#0a0b10] relative overflow-hidden">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover"/>

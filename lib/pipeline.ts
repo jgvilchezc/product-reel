@@ -1,8 +1,7 @@
 import { analyzeProduct, type ProductInput, type GeminiAnalysis } from './gemini';
 import {
   buildRenderPayload,
-  buildBoldEnergyPayload,
-  buildCleanMinimalPayload,
+  // buildBoldEnergyPayload, buildCleanMinimalPayload — kept in shotstack.ts for re-enable later
   submitRender,
   getRenderStatus,
 } from './shotstack';
@@ -28,13 +27,15 @@ export interface ProcessOptions {
 }
 
 export interface ProcessResult {
-  renderIds: [string, string, string];
+  renderIds: string[];
   productInput: ProductInput;
   brandName: string;
   analysis: GeminiAnalysis;
 }
 
-const TEMPLATE_LABELS = ['Cinematic Showcase', 'Bold Energy', 'Clean Minimal'] as const;
+// Bold Energy + Clean Minimal builders kept in shotstack.ts but not invoked here.
+// Re-add to the Promise.all + TEMPLATE_LABELS to restore the multi-template flow.
+const TEMPLATE_LABELS = ['Cinematic Showcase'] as const;
 
 export function shopifyToProductInput(product: ShopifyProduct): {
   productInput: ProductInput;
@@ -75,13 +76,10 @@ export async function processProduct(
 
   const analysis = await analyzeProduct(geminiInput, options.geminiKey);
 
-  const [id0, id1, id2] = await Promise.all([
-    submitRender(buildRenderPayload(productInput, analysis, undefined, brandName)),
-    submitRender(buildBoldEnergyPayload(productInput, analysis)),
-    submitRender(buildCleanMinimalPayload(productInput, analysis)),
-  ]);
-
-  const renderIds: [string, string, string] = [id0, id1, id2];
+  const renderId = await submitRender(
+    buildRenderPayload(productInput, analysis, undefined, brandName)
+  );
+  const renderIds: string[] = [renderId];
 
   if (options.notifyEmail) {
     const email = options.notifyEmail;
@@ -112,7 +110,7 @@ async function pollUntilDone(renderId: string): Promise<{ url?: string; error?: 
 }
 
 async function pollAndEmail(
-  renderIds: [string, string, string],
+  renderIds: string[],
   productName: string,
   brandName: string,
   recipient: string

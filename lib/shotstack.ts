@@ -50,6 +50,8 @@ export function buildRenderPayload(
     images.push(images[images.length - 1]);
   }
 
+  // Prefer Gemini's structured output (template-aligned); fall back to body_html parsing
+  // if a caller passes an analysis object missing the new fields.
   const description = (product.body_html || '').trim();
   const descSentences = description.split(/[.!?]+/).map((s) => s.trim()).filter((s) => s.length > 5);
   const aiSentences = (analysis.voiceover || '').split(/[.!?]+/).map((s) => s.trim()).filter((s) => s.length > 5);
@@ -61,14 +63,21 @@ export function buildRenderPayload(
   const type = 'NEW';
   const state = 'ONLINE';
   const postcode = 'WORLDWIDE';
-  const spec = (descSentences[0] || aiSentences[0] || 'PREMIUM QUALITY').toUpperCase().slice(0, 60);
+  const spec = (
+    analysis.spec ||
+    descSentences[0] ||
+    aiSentences[0] ||
+    'PREMIUM QUALITY'
+  ).toUpperCase().slice(0, 60);
   const interior = (
+    analysis.interior ||
     descSentences.slice(0, 2).join('. ') ||
     description.slice(0, 150) ||
     aiSentences.slice(0, 2).join('. ') ||
     'Crafted with premium materials.'
   ).slice(0, 150);
   const upgrades = (
+    analysis.upgrades ||
     descSentences.slice(2, 5).join('. ') ||
     aiSentences.slice(0, 3).join('. ') ||
     'Designed for performance and comfort.'
