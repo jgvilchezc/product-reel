@@ -59,6 +59,7 @@ const Navbar = () => (
       </a>
       <nav className="flex items-center gap-1 sm:gap-2">
         <a href="#how-it-works" className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">How it works</a>
+        <a href="#scrape"       className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">Scrape</a>
         <a href="#webhook"      className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">Webhook</a>
         <a href="#chat"         className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">AI Director</a>
         <a href="#setup"        className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">Setup</a>
@@ -256,38 +257,22 @@ const TEMPLATES: TemplateConfig[] = [
 type DemoStep = 'input' | 'rendering' | 'picker';
 const STATUS_PROGRESS: Record<string, number> = { queued: 5, fetching: 20, rendering: 65, saving: 90, done: 100 };
 
-const DemoInput = ({ apiKey, setApiKey, showKey, setShowKey, onStart, error }: {
-  apiKey: string; setApiKey: (v: string) => void;
-  showKey: boolean; setShowKey: (fn: (v: boolean) => boolean) => void;
+const DemoInput = ({ onStart, error }: {
   onStart: () => void; error: string;
 }) => (
   <div className="grid md:grid-cols-2">
     <div className="p-6 sm:p-8 border-b md:border-b-0 md:border-r border-line bg-[#0E0F14]">
       <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Input</div>
-      <h3 className="mt-2 font-display text-2xl font-semibold text-white tracking-tight">Generate three videos from one product.</h3>
+      <h3 className="mt-2 font-display text-2xl font-semibold text-white tracking-tight">Generate a video from one product.</h3>
       <p className="mt-2 text-[14px] text-white/55 max-w-md">
-        We&apos;ll use a sample Nike product. Bring your own Gemini key for a personalized voiceover, or skip and use ours.
+        Sample Nike product, full pipeline end-to-end — Gemini analyzes the imagery, Shotstack renders the Cinematic Showcase template, and the finished MP4 plays right here. No keys, no setup.
       </p>
-      <label className="mt-6 block text-[12px] font-mono uppercase tracking-widest text-white/45">
-        Gemini API key <span className="text-white/30 normal-case font-sans">(optional)</span>
-      </label>
-      <div className="mt-2 relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40"><ILock size={14}/></span>
-        <input type={showKey ? 'text' : 'password'} value={apiKey} onChange={e => setApiKey(e.target.value)}
-          placeholder="AIza••••••••••••••••••••"
-          className="w-full bg-[#0a0b10] border border-line focus:border-brand/60 focus-ring text-[13.5px] text-white placeholder:text-white/25 font-mono pl-9 pr-10 py-3 rounded-lg transition-colors"/>
-        <button type="button" onClick={() => setShowKey(s => !s)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-white/45 hover:text-white hover:bg-white/5">
-          {showKey ? <IEyeOff size={15}/> : <IEye size={15}/>}
-        </button>
-      </div>
-      <div className="mt-2 text-[11.5px] text-white/40">Stored only in browser. Never sent to our servers.</div>
-      {error && <div className="mt-3 px-3 py-2.5 rounded-lg bg-rose/10 border border-rose/30 text-rose text-[12.5px]">{error}</div>}
+      {error && <div className="mt-6 px-3 py-2.5 rounded-lg bg-rose/10 border border-rose/30 text-rose text-[12.5px]">{error}</div>}
       <button onClick={onStart}
         className="mt-7 w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-brand hover:bg-brand-hover text-white text-sm font-medium px-5 py-3 rounded-lg shadow-glow ring-1 ring-brand/40 transition-all">
-        <ISpark size={15}/> Generate videos <IArrow size={15}/>
+        <ISpark size={15}/> Generate video <IArrow size={15}/>
       </button>
-      <div className="mt-3 text-[12px] text-white/40">Average run · 47 seconds · 3 templates in parallel</div>
+      <div className="mt-3 text-[12px] text-white/40">Average run · ~30 seconds · cinematic showcase template</div>
     </div>
     <div className="p-6 sm:p-8 bg-card">
       <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Sample product</div>
@@ -356,7 +341,8 @@ const fmtTime = (s: number) =>
   `${Math.floor(s/60).toString().padStart(2,'0')}:${Math.floor(s%60).toString().padStart(2,'0')}`;
 
 const DemoRendering = ({ progress, elapsed, onCancel }: { progress: number[]; elapsed: number; onCancel: () => void }) => {
-  const total = (progress[0]+progress[1]+progress[2])/3;
+  const active = progress.filter((p) => p > 0).length || progress.length || 1;
+  const total = progress.reduce((a, b) => a + (b || 0), 0) / active;
   return (
     <div className="p-6 sm:p-8">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -365,7 +351,7 @@ const DemoRendering = ({ progress, elapsed, onCancel }: { progress: number[]; el
             <span className="absolute inset-0 rounded-full bg-brand-soft animate-ping opacity-60"/>
             <span className="relative w-2.5 h-2.5 rounded-full bg-brand-soft"/>
           </span>
-          <h3 className="font-display text-xl sm:text-2xl font-semibold text-white shimmer-text">Rendering 3 templates...</h3>
+          <h3 className="font-display text-xl sm:text-2xl font-semibold text-white shimmer-text">Rendering your video...</h3>
         </div>
         <div className="flex items-center gap-3 text-[12.5px] font-mono">
           <span className="inline-flex items-center gap-1.5 text-white/55"><IClock size={13}/> {fmtTime(elapsed)} elapsed</span>
@@ -558,8 +544,6 @@ const DemoStepper = ({ step, onJump }: { step: DemoStep; onJump: (s: DemoStep) =
 
 const DemoSection = () => {
   const [step, setStep]             = useState<DemoStep>('input');
-  const [apiKey, setApiKey]         = useState('');
-  const [showKey, setShowKey]       = useState(false);
   const [progress, setProgress]     = useState([0,0,0]);
   const [elapsed, setElapsed]       = useState(0);
   const [activeReel, setActiveReel] = useState('cinematicShowcase');
@@ -587,7 +571,7 @@ const DemoSection = () => {
     try {
       const res  = await fetch('/api/simulate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ geminiKey: apiKey.trim() || undefined }),
+        body: JSON.stringify({}),
       });
       const data = await res.json();
       if (!res.ok || !data.renderIds) throw new Error(data.error || 'Failed to start render');
@@ -639,9 +623,9 @@ const DemoSection = () => {
           <div>
             <SectionEyebrow icon={<IBolt size={12}/>}>Live demo</SectionEyebrow>
             <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white max-w-3xl">
-              Watch one product become <span className="text-gradient">three finished ads</span>.
+              Watch one product become <span className="text-gradient">a cinematic ad</span>.
             </h2>
-            <p className="mt-4 text-white/55 max-w-xl">We&apos;ll simulate a real Shopify run end-to-end. Three templates, in parallel, in real time.</p>
+            <p className="mt-4 text-white/55 max-w-xl">We&apos;ll simulate a real Shopify run end-to-end. One product, full pipeline, in real time.</p>
           </div>
           <DemoStepper step={step} onJump={handleJump}/>
         </div>
@@ -658,7 +642,7 @@ const DemoSection = () => {
                 <span className="w-1.5 h-1.5 rounded-full bg-ok"/>POST /api/simulate
               </span>
             </div>
-            {step==='input'     && <DemoInput apiKey={apiKey} setApiKey={setApiKey} showKey={showKey} setShowKey={setShowKey} onStart={start} error={error}/>}
+            {step==='input'     && <DemoInput onStart={start} error={error}/>}
             {step==='rendering' && <DemoRendering progress={progress} elapsed={elapsed} onCancel={reset}/>}
             {step==='picker'    && <DemoPicker activeReel={activeReel} setActiveReel={setActiveReel} onAgain={reset} videoUrls={videoUrls} renderErrors={renderErrors} onExpand={setModalUrl}/>}
           </div>
@@ -1417,6 +1401,266 @@ const WebhookTester = () => {
   );
 };
 
+// ── SCRAPE SECTION ─────────────────────────────────────────────
+type ScrapeStep = 'input' | 'rendering' | 'done';
+
+interface ScrapedProduct {
+  title: string;
+  vendor: string;
+  price: string;
+  imageCount: number;
+  sourceUrl: string;
+}
+
+const SAMPLE_SCRAPE_URLS = [
+  'https://www.allbirds.com/products/mens-tree-runners',
+  'https://us.gymshark.com/products/gymshark-arrival-shorts-black-ss22',
+  'https://www.deathwishcoffee.com/products/death-wish-ground-coffee',
+];
+
+const ScrapeSection = () => {
+  const [step, setStep] = useState<ScrapeStep>('input');
+  const [url, setUrl] = useState(SAMPLE_SCRAPE_URLS[0]);
+  const [product, setProduct] = useState<ScrapedProduct | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [videoUrl, setVideoUrl] = useState('');
+  const [error, setError] = useState('');
+  const [logs, setLogs] = useState<WebhookLogEntry[]>([]);
+  const [modalUrl, setModalUrl] = useState('');
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopAll = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  };
+  useEffect(() => () => stopAll(), []);
+
+  const log = (level: WebhookLogEntry['level'], msg: string) =>
+    setLogs((l) => [...l, { t: nowStamp(), level, msg }]);
+
+  const start = async () => {
+    const trimmed = url.trim();
+    if (!trimmed) { setError('Paste a Shopify product URL'); return; }
+    stopAll();
+    setStep('rendering'); setProgress(5); setElapsed(0); setError('');
+    setVideoUrl(''); setProduct(null); setLogs([]);
+    const t0 = Date.now();
+    timerRef.current = setInterval(() => setElapsed((Date.now() - t0) / 1000), 100);
+    log('sys', `POST /api/scrape · ${trimmed}`);
+
+    try {
+      const res = await fetch('/api/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productUrl: trimmed }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.renderIds) throw new Error(data.error || 'Scrape failed');
+
+      const scraped: ScrapedProduct = data.product;
+      setProduct(scraped);
+      log('ok', `Scraped ${scraped.title} · ${scraped.imageCount} images · $${scraped.price}`);
+      const renderId: string = data.renderIds[0];
+      log('sys', `Polling Shotstack render ${renderId.slice(0, 8)}...`);
+
+      pollRef.current = setInterval(async () => {
+        try {
+          const r = await fetch(`/api/status/${renderId}`).then((rr) => rr.json());
+          setProgress(STATUS_PROGRESS[r.status] ?? 5);
+          if (r.status === 'done') {
+            stopAll(); setVideoUrl(r.url); setStep('done');
+            log('ok', `Render complete (${fmtTime((Date.now() - t0) / 1000)})`);
+          } else if (r.status === 'failed') {
+            stopAll(); setError(r.error || 'Render failed'); setStep('input');
+            log('err', `Render failed: ${r.error || 'unknown'}`);
+          }
+        } catch { /* keep polling */ }
+      }, 3000);
+    } catch (e) {
+      stopAll();
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg); setStep('input');
+      log('err', msg);
+    }
+  };
+
+  const reset = () => {
+    stopAll();
+    setStep('input'); setProgress(0); setElapsed(0); setVideoUrl(''); setProduct(null); setError(''); setLogs([]);
+  };
+
+  return (
+    <>
+    <section id="scrape" className="relative border-t border-line">
+      <div className="absolute inset-0 pointer-events-none"
+           style={{ background: 'radial-gradient(60% 50% at 50% 0%,rgba(217,102,87,0.18),transparent 60%)' }}/>
+      <div className="relative max-w-6xl mx-auto px-6 py-20 sm:py-28">
+        <div className="flex items-end justify-between gap-6 flex-wrap">
+          <div>
+            <SectionEyebrow icon={<IShop size={12}/>}>Scrape any Shopify URL</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white max-w-3xl">
+              Paste a Shopify product URL — <span className="text-gradient-violet">get a finished video</span> in 30 seconds.
+            </h2>
+            <p className="mt-4 text-white/55 max-w-xl">
+              Works with any public Shopify store. We hit the storefront <span className="font-mono text-white/75">/products/&lt;handle&gt;.json</span> endpoint, run Gemini analysis on the product, then render the Cinematic Showcase template. No auth, no setup.
+            </p>
+          </div>
+        </div>
+
+        <div className="relative mt-10">
+          <div className="absolute -inset-1 rounded-[28px] pointer-events-none"
+               style={{ background: 'radial-gradient(60% 60% at 50% 50%,rgba(217,102,87,0.22),transparent 70%)', filter: 'blur(40px)' }}/>
+          <div className="relative rounded-2xl border border-rose/30 bg-card overflow-hidden shadow-[0_0_60px_rgba(217,102,87,0.15)]">
+            <div className="px-4 h-10 border-b border-line bg-[#0A0B10] flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+              <span className="ml-2 font-mono text-[11px] text-white/40">productreel · /scrape</span>
+              <span className="ml-auto inline-flex items-center gap-2 font-mono text-[10.5px] text-white/40">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose"/>POST /api/scrape
+              </span>
+            </div>
+
+            <div className="grid md:grid-cols-2">
+              {/* LEFT — URL form / status */}
+              <div className="p-6 sm:p-8 border-b md:border-b-0 md:border-r border-line bg-[#0E0F14]">
+                <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Product URL</div>
+
+                <div className="mt-3 relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40"><ILink size={14}/></span>
+                  <input type="url" value={url} onChange={(e) => setUrl(e.target.value)}
+                    disabled={step === 'rendering'}
+                    placeholder="https://store.example.com/products/handle"
+                    className="w-full bg-[#0a0b10] border border-line focus:border-rose/60 focus-ring text-[13.5px] text-white placeholder:text-white/25 font-mono pl-9 pr-3 py-3 rounded-lg transition-colors disabled:opacity-60"/>
+                </div>
+
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {SAMPLE_SCRAPE_URLS.map((u) => (
+                    <button key={u} type="button" onClick={() => setUrl(u)}
+                      disabled={step === 'rendering'}
+                      className="text-[10.5px] font-mono text-white/50 hover:text-white px-2 py-1 rounded border border-line hover:border-line2 transition-colors disabled:opacity-40">
+                      {new URL(u).hostname.replace(/^www\./, '')}
+                    </button>
+                  ))}
+                </div>
+
+                {error && step === 'input' && (
+                  <div className="mt-4 px-3 py-2.5 rounded-lg bg-rose/10 border border-rose/30 text-rose text-[12.5px]">{error}</div>
+                )}
+
+                {step === 'input' && (
+                  <button onClick={start}
+                    className="mt-6 w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-rose hover:opacity-90 text-white text-sm font-medium px-5 py-3 rounded-lg shadow-glow ring-1 ring-rose/40 transition-all">
+                    <ISpark size={15}/> Scrape & generate <IArrow size={15}/>
+                  </button>
+                )}
+
+                {step === 'rendering' && (
+                  <div className="mt-6">
+                    <div className="flex items-center justify-between text-[12px] font-mono text-white/45">
+                      <span className="inline-flex items-center gap-1.5"><IClock size={13}/> {fmtTime(elapsed)} elapsed</span>
+                      <span>{progress}%</span>
+                    </div>
+                    <div className="mt-2 relative h-2 rounded-full bg-white/8 overflow-hidden">
+                      <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-rose to-violet transition-all" style={{ width: `${progress}%` }}/>
+                      <div className="absolute inset-0 shimmer-bg mix-blend-screen opacity-80"/>
+                    </div>
+                    <button onClick={reset} className="mt-4 text-[12px] text-white/55 hover:text-white px-2.5 py-1.5 rounded-md border border-line hover:border-line2">Cancel</button>
+                  </div>
+                )}
+
+                {step === 'done' && (
+                  <button onClick={reset}
+                    className="mt-6 inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/15 text-white text-sm font-medium px-4 py-2.5 rounded-lg border border-line transition-all">
+                    <IRefresh size={14}/> Try another URL
+                  </button>
+                )}
+
+                <div className="mt-6 rounded-xl border border-line bg-[#0a0b10] overflow-hidden">
+                  <div className="px-4 h-9 border-b border-line flex items-center gap-2">
+                    <ITerminal size={13} className="text-white/45"/>
+                    <span className="font-mono text-[11px] text-white/45">scrape.log</span>
+                  </div>
+                  <div className="p-4 font-mono text-[11.5px] leading-6 text-white/55 max-h-44 overflow-y-auto">
+                    {logs.length === 0 ? (
+                      <div className="text-white/30">Waiting for input…</div>
+                    ) : logs.map((l, i) => (
+                      <div key={i} className="flex items-start gap-3">
+                        <span className="text-white/30 shrink-0">{l.t}</span>
+                        <span className={`shrink-0 w-1.5 h-1.5 mt-2 rounded-full ${l.level==='ok'?'bg-ok':l.level==='err'?'bg-rose':'bg-brand-soft'}`}/>
+                        <span className={l.level==='err'?'text-rose':'text-white/70'}>{l.msg}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT — preview / video */}
+              <div className="p-6 sm:p-8 bg-card">
+                {!product && step !== 'done' && (
+                  <div className="h-full min-h-[300px] flex flex-col items-center justify-center text-center text-white/40">
+                    <IShop size={36} className="text-white/20 mb-4"/>
+                    <div className="text-[13.5px] text-white/55">Product preview will appear here</div>
+                    <div className="mt-1 text-[11.5px] text-white/35">After we fetch the storefront JSON</div>
+                  </div>
+                )}
+
+                {product && (
+                  <>
+                    <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Scraped product</div>
+                    <div className="mt-3 rounded-xl border border-line bg-[#0a0b10] p-4">
+                      <div className="text-[15px] text-white font-medium">{product.title}</div>
+                      <div className="mt-1 text-[12.5px] text-white/55">{product.vendor}</div>
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11.5px] font-mono">
+                        <div className="p-2 rounded-md bg-white/5">
+                          <div className="text-white/45">price</div>
+                          <div className="text-white mt-0.5">${product.price}</div>
+                        </div>
+                        <div className="p-2 rounded-md bg-white/5">
+                          <div className="text-white/45">images</div>
+                          <div className="text-white mt-0.5">{product.imageCount}</div>
+                        </div>
+                        <div className="p-2 rounded-md bg-white/5">
+                          <div className="text-white/45">source</div>
+                          <div className="text-white mt-0.5 truncate">{new URL(product.sourceUrl).hostname.replace(/^www\./,'')}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {step === 'done' && videoUrl && (
+                      <div className="mt-4">
+                        <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45 mb-2">Result</div>
+                        <div className="relative rounded-xl border border-rose/40 overflow-hidden bg-black">
+                          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                          <video src={videoUrl} controls playsInline className="w-full aspect-video bg-black"/>
+                        </div>
+                        <div className="mt-3 flex items-center gap-2">
+                          <button onClick={() => setModalUrl(videoUrl)}
+                            className="inline-flex items-center gap-1.5 text-[12px] text-white/70 hover:text-white px-3 py-2 rounded-md border border-line hover:border-line2">
+                            <IPlay size={12}/> Fullscreen
+                          </button>
+                          <a href={videoUrl} target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-[12px] text-white/70 hover:text-white px-3 py-2 rounded-md border border-line hover:border-line2">
+                            <IDownload size={12}/> Download MP4
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    {modalUrl && <VideoModal url={modalUrl} onClose={() => setModalUrl('')}/>}
+    </>
+  );
+};
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-ink text-white">
@@ -1425,6 +1669,7 @@ export default function Home() {
         <Hero/>
         <HowItWorks/>
         <DemoSection/>
+        <ScrapeSection/>
         <WebhookTester/>
         <ChatSection/>
         <SetupSection/>
