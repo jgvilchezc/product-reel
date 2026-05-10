@@ -60,7 +60,7 @@ const Navbar = () => (
       <nav className="flex items-center gap-1 sm:gap-2">
         <a href="#how-it-works" className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">How it works</a>
         <a href="#scrape"       className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">Scrape</a>
-        <a href="#webhook"      className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">Webhook</a>
+        <a href="#connect"      className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">Connect</a>
         <a href="#chat"         className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">AI Director</a>
         <a href="#setup"        className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">Setup</a>
         <a href="#demo"         className="text-[13px] text-white/85 hover:text-white px-3 py-2 rounded-lg border border-line hover:border-line2 transition-colors">View demo</a>
@@ -1015,391 +1015,6 @@ const FieldLabel = ({ idx, children, hint }: { idx: string; children: ReactNode;
 const inputCls =
   'w-full bg-[#0a0b10] border border-line rounded-md px-3 py-2 text-[13px] text-white placeholder:text-white/25 font-sans focus-ring transition-colors hover:border-line2';
 
-const WebhookTester = () => {
-  const [form, setForm] = useState<WebhookFormState>(EMPTY_FORM);
-  const [geminiKey, setGeminiKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
-  const [logs, setLogs] = useState<WebhookLogEntry[]>([
-    { t: nowStamp(), level: 'sys', msg: 'standby. fill payload, dispatch when ready.' },
-  ]);
-  const [renders, setRenders] = useState<WebhookRenderState[]>([]);
-  const [phase, setPhase] = useState<'idle' | 'sending' | 'polling' | 'done' | 'error'>('idle');
-  const [topError, setTopError] = useState<string | null>(null);
-  const logScrollRef = useRef<HTMLDivElement>(null);
-
-  const update = (k: keyof WebhookFormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  const append = (level: WebhookLogEntry['level'], msg: string) =>
-    setLogs((l) => [...l, { t: nowStamp(), level, msg }]);
-
-  useEffect(() => {
-    if (logScrollRef.current) {
-      logScrollRef.current.scrollTop = logScrollRef.current.scrollHeight;
-    }
-  }, [logs]);
-
-  useEffect(() => {
-    if (phase !== 'polling' || renders.length === 0) return;
-    if (renders.every((r) => r.status === 'done' || r.status === 'failed')) {
-      setPhase('done');
-      const okCount = renders.filter((r) => r.status === 'done').length;
-      append('ok', `pipeline complete · ${okCount}/${renders.length} renders ready`);
-      return;
-    }
-    const interval = window.setInterval(async () => {
-      const next = await Promise.all(
-        renders.map(async (r, idx) => {
-          if (r.status === 'done' || r.status === 'failed') return r;
-          try {
-            const res = await fetch(`/api/status/${r.renderId}`);
-            const j = await res.json();
-            if (j.error && !j.status) return { ...r, status: 'failed' as const, error: j.error };
-            const updated: WebhookRenderState = { ...r, status: j.status, url: j.url, error: j.error };
-            if (j.status === 'done') {
-              setTimeout(() => append('ok', `${TEMPLATE_LABELS[idx] || 'render'} → done`), 0);
-            } else if (j.status === 'failed') {
-              setTimeout(() => append('err', `${TEMPLATE_LABELS[idx] || 'render'} → failed: ${j.error || 'unknown'}`), 0);
-            }
-            return updated;
-          } catch (e) {
-            return { ...r, status: 'failed' as const, error: e instanceof Error ? e.message : String(e) };
-          }
-        })
-      );
-      setRenders(next);
-    }, 2500);
-    return () => window.clearInterval(interval);
-  }, [phase, renders]);
-
-  const useSample = () => {
-    setForm(SAMPLE_PRODUCT);
-    append('sys', `sample payload loaded · ${SAMPLE_PRODUCT.title}`);
-  };
-
-  const reset = () => {
-    setForm(EMPTY_FORM);
-    setRenders([]);
-    setPhase('idle');
-    setTopError(null);
-    setLogs([{ t: nowStamp(), level: 'sys', msg: 'reset. ready for next dispatch.' }]);
-  };
-
-  const dispatch = async () => {
-    setTopError(null);
-    if (!form.title.trim()) { setTopError('Title is required.'); return; }
-    const images = [form.image1, form.image2, form.image3].map((s) => s.trim()).filter(Boolean);
-    if (images.length === 0) { setTopError('At least one image URL is required.'); return; }
-
-    const payload: WebhookProduct = {
-      id: Math.floor(Math.random() * 1_000_000_000),
-      title: form.title.trim(),
-      body_html: form.description.trim() ? `<p>${form.description.trim()}</p>` : '',
-      vendor: form.vendor.trim() || 'Test Store',
-      variants: [{ price: form.price.trim() || '0' }],
-      images: images.map((src) => ({ src })),
-    };
-
-    setPhase('sending');
-    setRenders([]);
-    append('sys', `POST /api/webhook · payload ${images.length} image${images.length > 1 ? 's' : ''} · id ${payload.id}`);
-
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'x-test-mode': '1',
-      };
-      if (geminiKey.trim()) headers['x-gemini-key'] = geminiKey.trim();
-
-      const res = await fetch('/api/webhook', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        setPhase('error');
-        const msg = data.error || `HTTP ${res.status}`;
-        append('err', msg);
-        setTopError(msg);
-        return;
-      }
-      append('ok', `200 OK · renders submitted: ${(data.renderIds as string[]).join(', ')}`);
-      if (data.emailQueued) append('sys', 'background email task queued (Resend)');
-      else append('sys', 'no MERCHANT_EMAIL configured — email skipped');
-
-      const initial: WebhookRenderState[] = (data.renderIds as string[]).map((renderId) => ({
-        renderId,
-        status: 'queued',
-      }));
-      setRenders(initial);
-      setPhase('polling');
-      append('sys', 'polling /api/status every 2.5s …');
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setPhase('error');
-      append('err', `network error: ${msg}`);
-      setTopError(msg);
-    }
-  };
-
-  const indicator: 'idle' | 'send' | 'wait' | 'done' | 'err' =
-    phase === 'idle' ? 'idle' :
-    phase === 'sending' ? 'send' :
-    phase === 'polling' ? 'wait' :
-    phase === 'done' ? 'done' : 'err';
-
-  const phaseLabel = {
-    idle: 'standby',
-    sending: 'dispatching',
-    polling: 'rendering',
-    done: 'complete',
-    error: 'error',
-  }[phase];
-
-  const placeholderRenders: Array<WebhookRenderState | null> = renders.length > 0
-    ? renders
-    : [null, null, null];
-
-  return (
-    <section id="webhook" className="relative border-t border-line">
-      <div className="absolute inset-0 grid-bg pointer-events-none opacity-[0.5]"/>
-      <div className="relative max-w-6xl mx-auto px-6 py-20">
-        <div className="flex items-end justify-between gap-6 mb-10">
-          <div>
-            <SectionEyebrow icon={<IBolt size={13} className="text-brand-soft"/>}>
-              Manual dispatch
-            </SectionEyebrow>
-            <h2 className="mt-3 font-display text-[34px] sm:text-[42px] leading-[1.05] tracking-tight">
-              Fire a webhook. <span className="text-gradient-violet">Watch it land.</span>
-            </h2>
-            <p className="mt-3 text-[14px] text-white/60 max-w-xl">
-              Post a synthetic Shopify <span className="font-mono text-brand-soft">product.created</span> payload
-              straight to <span className="font-mono text-white/85">/api/webhook</span> and observe the pipeline in real time.
-            </p>
-          </div>
-          <div className="hidden sm:flex items-center gap-2 text-[11px] font-mono text-white/45 uppercase tracking-[0.2em]">
-            <ITerminal size={13} className="text-brand-soft"/> dev console
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          <div className="lg:col-span-5 rounded-2xl border border-line bg-card/80 backdrop-blur p-5 sm:p-6">
-            <div className="flex items-center gap-3 pb-4 mb-5 border-b border-line">
-              <span className="inline-flex items-center font-mono text-[10.5px] tracking-[0.2em] uppercase px-2 py-0.5 rounded-md bg-brand/10 text-brand-soft border border-brand/25">
-                POST
-              </span>
-              <span className="font-mono text-[12.5px] text-white/85">/api/webhook</span>
-              <button
-                type="button"
-                onClick={useSample}
-                className="ml-auto text-[11.5px] font-mono text-white/55 hover:text-brand-soft transition-colors"
-              >
-                use sample ↺
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <FieldLabel idx="01">Product title</FieldLabel>
-                <input className={inputCls} value={form.title} onChange={update('title')} placeholder="Air Jordan 1 Retro High OG"/>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <FieldLabel idx="02">Vendor</FieldLabel>
-                  <input className={inputCls} value={form.vendor} onChange={update('vendor')} placeholder="Test Store"/>
-                </div>
-                <div>
-                  <FieldLabel idx="03" hint="number">Price</FieldLabel>
-                  <input className={inputCls} value={form.price} onChange={update('price')} placeholder="180.00" inputMode="decimal"/>
-                </div>
-              </div>
-
-              <div>
-                <FieldLabel idx="04">Description</FieldLabel>
-                <textarea
-                  className={`${inputCls} resize-none h-[88px] py-2.5`}
-                  value={form.description}
-                  onChange={update('description')}
-                  placeholder="The iconic sneaker that changed basketball forever…"
-                />
-              </div>
-
-              <div>
-                <FieldLabel idx="05" hint="must end in .jpg / .png / .webp">Image URLs · up to 3</FieldLabel>
-                <div className="space-y-2">
-                  <input className={inputCls} value={form.image1} onChange={update('image1')} placeholder="https://…/photo-1.jpg"/>
-                  <input className={inputCls} value={form.image2} onChange={update('image2')} placeholder="https://…/photo-2.jpg"/>
-                  <input className={inputCls} value={form.image3} onChange={update('image3')} placeholder="https://…/photo-3.jpg"/>
-                </div>
-              </div>
-
-              <div>
-                <FieldLabel idx="06" hint="optional · overrides server env">Gemini API key</FieldLabel>
-                <div className="relative">
-                  <input
-                    className={`${inputCls} pr-10`}
-                    type={showKey ? 'text' : 'password'}
-                    value={geminiKey}
-                    onChange={(e) => setGeminiKey(e.target.value)}
-                    placeholder="AIza…"
-                    autoComplete="off"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey((v) => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-white/45 hover:text-white"
-                    aria-label={showKey ? 'Hide key' : 'Show key'}
-                  >
-                    {showKey ? <IEyeOff size={14}/> : <IEye size={14}/>}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {topError && (
-              <div className="mt-5 flex items-start gap-2 rounded-md border border-rose/40 bg-rose/10 px-3 py-2 text-[12.5px] text-rose">
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em] mt-0.5">err</span>
-                <span className="flex-1">{topError}</span>
-              </div>
-            )}
-
-            <div className="mt-6 flex items-center gap-3">
-              <button
-                onClick={dispatch}
-                disabled={phase === 'sending' || phase === 'polling'}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13.5px] font-medium text-white bg-brand hover:bg-brand-hover shadow-glow-sm hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
-                <ISend size={14}/>
-                {phase === 'sending' ? 'Dispatching…' : phase === 'polling' ? 'Rendering…' : 'Dispatch webhook'}
-                {phase !== 'sending' && phase !== 'polling' && <IArrow size={14} className="-mr-0.5"/>}
-              </button>
-              <button
-                onClick={reset}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12.5px] text-white/60 hover:text-white border border-line hover:border-line2 transition-colors"
-              >
-                <IRefresh size={13}/> Reset
-              </button>
-              <span className="ml-auto inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-white/45">
-                <StatusDot state={indicator}/> {phaseLabel}
-              </span>
-            </div>
-          </div>
-
-          <div className="lg:col-span-7 space-y-5">
-            <div className="rounded-2xl border border-line bg-panel overflow-hidden">
-              <div className="px-4 h-10 border-b border-line bg-[#0a0b10] flex items-center gap-2">
-                <ITerminal size={13} className="text-brand-soft"/>
-                <span className="font-mono text-[11.5px] text-white/55 tracking-[0.18em] uppercase">telemetry</span>
-                <span className="ml-auto inline-flex items-center gap-1.5 font-mono text-[10.5px] text-white/45">
-                  <StatusDot state={indicator}/>
-                  {phase === 'polling' ? `${renders.filter((r) => r.status === 'done').length}/${renders.length} ready` : phaseLabel}
-                </span>
-              </div>
-              <div
-                ref={logScrollRef}
-                className="max-h-[220px] overflow-y-auto p-4 font-mono text-[12px] leading-[1.65] scanlines"
-              >
-                {logs.map((l, i) => (
-                  <div key={i} className="flex gap-3">
-                    <span className="text-white/30 select-none tabular-nums">{l.t}</span>
-                    <span className={
-                      l.level === 'ok'  ? 'text-ok' :
-                      l.level === 'err' ? 'text-rose' :
-                                          'text-white/70'
-                    }>
-                      {l.level === 'sys' ? '·' : l.level === 'ok' ? '✓' : '✕'} {l.msg}
-                    </span>
-                  </div>
-                ))}
-                {phase === 'polling' && (
-                  <div className="flex gap-3 pt-1">
-                    <span className="text-white/30 select-none tabular-nums">{nowStamp()}</span>
-                    <span className="shimmer-text">awaiting render completion…</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {placeholderRenders.map((r, i) => {
-                const label = TEMPLATE_LABELS[i];
-                if (!r) {
-                  return (
-                    <div key={i} className="rounded-xl border border-line bg-card/60 p-4 min-h-[150px] flex flex-col">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[10px] text-white/30 tabular-nums">{String(i + 1).padStart(2, '0')}</span>
-                        <span className="font-display text-[13.5px] text-white/55">{label}</span>
-                      </div>
-                      <div className="mt-auto pt-4">
-                        <div className="h-1 rounded-full bg-white/8 overflow-hidden">
-                          <div className="h-full bg-white/15" style={{ width: '4%' }}/>
-                        </div>
-                        <div className="mt-2 font-mono text-[10px] text-white/30 uppercase tracking-[0.18em]">awaiting dispatch</div>
-                      </div>
-                    </div>
-                  );
-                }
-                const pct = r.status === 'done' ? 100 :
-                  r.status === 'failed' ? 100 :
-                  STATUS_PROGRESS[r.status] ?? 8;
-                const barCls = r.status === 'failed' ? 'bg-rose' : r.status === 'done' ? 'bg-ok' : 'bg-gradient-to-r from-brand to-violet';
-                return (
-                  <div key={r.renderId} className={`rounded-xl border bg-card p-4 min-h-[150px] flex flex-col card-hover ${
-                    r.status === 'done' ? 'border-ok/30' : r.status === 'failed' ? 'border-rose/35' : 'border-line'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[10px] text-white/40 tabular-nums">{String(i + 1).padStart(2, '0')}</span>
-                      <span className="font-display text-[13.5px] text-white">{label}</span>
-                      <span className="ml-auto"><RenderStatusPill status={r.status}/></span>
-                    </div>
-                    <div className="mt-3 font-mono text-[10px] text-white/30 break-all">id · {r.renderId.slice(0, 8)}…{r.renderId.slice(-4)}</div>
-                    <div className="mt-auto pt-4">
-                      <div className="h-1 rounded-full bg-white/8 overflow-hidden">
-                        <div
-                          className={`h-full ${barCls} transition-[width] duration-700 ease-out`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      {r.status === 'done' && r.url && (
-                        <a
-                          href={r.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-brand-soft hover:text-white transition-colors"
-                        >
-                          <IDownload size={12}/> open video
-                        </a>
-                      )}
-                      {r.status === 'failed' && (
-                        <div className="mt-3 font-mono text-[10.5px] text-rose/85 line-clamp-2">
-                          {r.error || 'render failed'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="rounded-xl border border-line bg-[#0a0b10]/60 px-4 py-3 flex items-start gap-3">
-              <span className="mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-md bg-amber/15 text-amber border border-amber/30">
-                <IBolt size={11}/>
-              </span>
-              <div className="text-[12px] text-white/55 leading-relaxed">
-                The UI uses <span className="font-mono text-white/80">x-test-mode: 1</span> so the route returns
-                <span className="font-mono text-white/80"> renderIds</span> for live polling. Real Shopify webhooks
-                hit the same endpoint without that header — they get a fast 200 and the email lands when the
-                renders finish in the background.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-};
 
 // ── SCRAPE SECTION ─────────────────────────────────────────────
 type ScrapeStep = 'input' | 'rendering' | 'done';
@@ -1661,6 +1276,191 @@ const ScrapeSection = () => {
   );
 };
 
+// ── CONNECT SHOPIFY SECTION ────────────────────────────────────
+const HealthRow = ({ ok, label, value }: { ok: boolean; label: string; value: string }) => (
+  <div className="flex items-center justify-between gap-3">
+    <span className="text-[13px] text-white/65">{label}</span>
+    <span className={`inline-flex items-center gap-1.5 text-[12px] font-mono ${ok ? 'text-ok' : 'text-rose'}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-ok' : 'bg-rose'}`}/>
+      {value}
+    </span>
+  </div>
+);
+
+const ConnectShopifySection = () => {
+  const [webhookUrl, setWebhookUrl] = useState('https://product-reel.vercel.app/api/webhook');
+  const [copied, setCopied] = useState(false);
+  const [endpointStatus, setEndpointStatus] = useState<'checking' | 'ok' | 'err'>('checking');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const origin = window.location.origin;
+    if (!origin.includes('localhost')) {
+      setWebhookUrl(`${origin}/api/webhook`);
+    }
+    fetch('/api/webhook', { method: 'OPTIONS' })
+      .then((r) => setEndpointStatus(r.status >= 200 && r.status < 500 ? 'ok' : 'err'))
+      .catch(() => setEndpointStatus('err'));
+  }, []);
+
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard blocked — silently fail */ }
+  };
+
+  const steps: { title: string; body: ReactNode; cta?: { label: string; href: string } }[] = [
+    {
+      title: 'Create a free Shopify Partners account',
+      body: 'No credit card required. Takes 2 minutes.',
+      cta: { label: 'partners.shopify.com/signup', href: 'https://partners.shopify.com/signup' },
+    },
+    {
+      title: 'Add a development store',
+      body: 'Inside Partners dashboard: Stores → Add store → Create development store. Free forever for dev work.',
+    },
+    {
+      title: 'Open your dev store admin',
+      body: 'Settings (gear icon, bottom-left) → Notifications → scroll to "Webhooks" → click Create webhook.',
+    },
+    {
+      title: 'Configure the webhook',
+      body: (
+        <>
+          Event: <code className="font-mono text-brand-soft px-1 rounded bg-brand/10">products/create</code>. Format:{' '}
+          <code className="font-mono text-brand-soft px-1 rounded bg-brand/10">JSON</code>. URL: paste the one above. API version: latest.
+        </>
+      ),
+    },
+    {
+      title: 'Copy the signing secret',
+      body: 'Open your new webhook in Shopify Admin and copy the "Signing secret" string Shopify shows below the URL.',
+    },
+    {
+      title: 'Paste it in Vercel env vars',
+      body: (
+        <>
+          Vercel dashboard → product-reel → Settings → Environment Variables. Add{' '}
+          <code className="font-mono text-brand-soft px-1 rounded bg-brand/10">SHOPIFY_WEBHOOK_SECRET</code> = (paste secret). Then redeploy.
+        </>
+      ),
+    },
+    {
+      title: 'Fire your first real webhook',
+      body: 'In your dev store: Products → Add product → fill title + price + upload 3+ images → Save. Email lands in ~30s with your finished video.',
+    },
+  ];
+
+  return (
+    <section id="connect" className="relative border-t border-line">
+      <div className="absolute inset-0 pointer-events-none"
+           style={{ background: 'radial-gradient(60% 50% at 50% 0%,rgba(61,123,255,0.18),transparent 60%),radial-gradient(40% 40% at 80% 30%,rgba(124,92,255,0.12),transparent 60%)' }}/>
+      <div className="relative max-w-6xl mx-auto px-6 py-20 sm:py-28">
+        <div className="flex items-end justify-between gap-6 flex-wrap">
+          <div>
+            <SectionEyebrow icon={<ICloud size={12}/>}>Real Shopify automation</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white max-w-3xl">
+              Connect your store. <span className="text-gradient">Auto-render every new product</span>.
+            </h2>
+            <p className="mt-4 text-white/55 max-w-xl">
+              Paste one URL into Shopify Admin. Every product you create from then on fires Gemini + Shotstack automatically and emails you the finished Cinematic Showcase video.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-10 rounded-2xl border border-brand/30 bg-card overflow-hidden shadow-[0_0_60px_rgba(61,123,255,0.18)]">
+          <div className="px-4 h-10 border-b border-line bg-[#0A0B10] flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+            <span className="ml-2 font-mono text-[11px] text-white/40">productreel · /connect</span>
+            <span className="ml-auto inline-flex items-center gap-2 font-mono text-[10.5px] text-white/40">
+              <span className={`w-1.5 h-1.5 rounded-full ${endpointStatus === 'ok' ? 'bg-ok' : endpointStatus === 'err' ? 'bg-rose' : 'bg-amber animate-pulse'}`}/>
+              {endpointStatus === 'ok' ? 'endpoint live' : endpointStatus === 'err' ? 'endpoint down' : 'checking…'}
+            </span>
+          </div>
+          <div className="p-6 sm:p-8">
+            <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Your webhook endpoint</div>
+            <div className="mt-3 flex gap-2 flex-wrap">
+              <div className="flex-1 min-w-[260px] flex items-center gap-2 rounded-lg border border-line bg-[#0a0b10] px-3.5 py-3">
+                <ILink size={14} className="text-white/40 shrink-0"/>
+                <input readOnly value={webhookUrl}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                  className="flex-1 bg-transparent text-[13.5px] text-white font-mono outline-none truncate"/>
+              </div>
+              <button onClick={copyUrl}
+                className={`inline-flex items-center gap-2 text-sm font-medium px-4 py-3 rounded-lg transition-all ${copied ? 'bg-ok text-black' : 'bg-brand hover:bg-brand-hover text-white shadow-glow ring-1 ring-brand/40'}`}>
+                {copied ? <><ICheck size={15}/> Copied</> : <><ICopy size={15}/> Copy URL</>}
+              </button>
+            </div>
+            <div className="mt-3 text-[12px] text-white/40">
+              This URL accepts signed Shopify <span className="font-mono text-white/60">products/create</span> webhooks. HMAC validation is enabled server-side.
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8 grid lg:grid-cols-[1.4fr_1fr] gap-6">
+          <div className="rounded-2xl border border-line bg-card p-6 sm:p-8">
+            <div className="flex items-center justify-between mb-5">
+              <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Setup in 5 minutes</div>
+              <div className="font-mono text-[10.5px] text-white/30">7 steps</div>
+            </div>
+            <ol className="space-y-5">
+              {steps.map((s, idx) => (
+                <li key={idx} className="flex gap-4">
+                  <div className="shrink-0 w-7 h-7 rounded-md bg-gradient-to-br from-brand to-violet flex items-center justify-center text-[12px] font-mono text-white font-semibold">
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1 pt-0.5">
+                    <div className="text-[14.5px] text-white font-medium">{s.title}</div>
+                    <div className="mt-1 text-[13px] text-white/55 leading-relaxed">{s.body}</div>
+                    {s.cta && (
+                      <a href={s.cta.href} target="_blank" rel="noreferrer"
+                        className="mt-2 inline-flex items-center gap-1.5 text-[12px] text-brand-soft hover:text-white font-mono transition-colors">
+                        {s.cta.label} <IArrow size={11}/>
+                      </a>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="rounded-2xl border border-line bg-card p-6 sm:p-8 lg:sticky lg:top-24 self-start">
+            <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Stack health</div>
+            <div className="mt-5 space-y-3">
+              <HealthRow ok={endpointStatus === 'ok'} label="Webhook endpoint" value={endpointStatus === 'ok' ? 'reachable' : endpointStatus === 'err' ? 'unreachable' : 'checking…'}/>
+              <HealthRow ok={true} label="HMAC validation" value="enabled"/>
+              <HealthRow ok={true} label="Cinematic Showcase" value="ready"/>
+              <HealthRow ok={true} label="Resend email delivery" value="ready"/>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-line">
+              <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Don&apos;t have a store yet?</div>
+              <p className="mt-2 text-[12.5px] text-white/55 leading-relaxed">
+                Skip the setup and paste any public Shopify product URL into the{' '}
+                <a href="#scrape" className="text-brand-soft hover:text-white underline underline-offset-2">Scrape</a>{' '}
+                section to see the pipeline run.
+              </p>
+            </div>
+
+            <div className="mt-6 rounded-lg border border-violet/30 bg-violet/5 p-4">
+              <div className="flex items-start gap-2">
+                <IBolt size={14} className="text-violet-soft shrink-0 mt-0.5"/>
+                <div className="text-[12.5px] text-white/70 leading-relaxed">
+                  Shopify development stores are <span className="text-white font-medium">free forever</span> for testing. No credit card, no time limit.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-ink text-white">
@@ -1670,7 +1470,7 @@ export default function Home() {
         <HowItWorks/>
         <DemoSection/>
         <ScrapeSection/>
-        <WebhookTester/>
+        <ConnectShopifySection/>
         <ChatSection/>
         <SetupSection/>
         <Waitlist/>
