@@ -291,7 +291,7 @@ const DemoInput = ({ onStart, error }: {
         </div>
       </div>
       <div className="mt-4 grid grid-cols-4 gap-2">
-        {(['/nike2.avif', '/nike3.avif', '/nike4.png', '/nike5.jpg'] as const).map((src, i) => (
+        {(['/nike2.jpg', '/nike3.jpg', '/nike4.png', '/nike5.jpg'] as const).map((src, i) => (
           <div key={i} className="aspect-square rounded-lg border border-line bg-[#0a0b10] relative overflow-hidden">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover"/>

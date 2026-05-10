@@ -19,7 +19,9 @@ interface ShotstackTrack {
   clips: ShotstackClip[];
 }
 
-const IMAGE_EXT_RE = /\.(jpg|jpeg|png|gif|webp|bmp|tiff|avif)(\?|#|$)/i;
+// AVIF is intentionally excluded — Shotstack's renderer rejects it as "format not supported".
+// If you see .avif in a Shopify CDN URL, normalizeImageUrl will throw before the render submits.
+const IMAGE_EXT_RE = /\.(jpg|jpeg|png|gif|webp|bmp|tiff)(\?|#|$)/i;
 
 function normalizeImageUrl(url: string): string {
   if (IMAGE_EXT_RE.test(url)) return url;
