@@ -46,7 +46,10 @@ export async function POST(req: NextRequest) {
     return new NextResponse('OK (misconfigured)', { status: 200 });
   }
 
-  const notifyEmail = process.env.MERCHANT_EMAIL;
+  // MERCHANT_EMAIL falls back to the project owner's email when not set in Vercel env.
+  // (Vercel UI has been intermittently dropping the value on save; this guarantees the
+  // pollAndEmail task always runs in production.)
+  const notifyEmail = process.env.MERCHANT_EMAIL || 'josegabrielvilchezc@gmail.com';
 
   // Test mode: await the submit phase so the dev UI can see renderIds & poll status.
   // Email task is still fire-and-forget inside processProduct() when notifyEmail is set.
