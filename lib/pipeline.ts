@@ -125,9 +125,11 @@ async function pollAndEmail(
   brandName: string,
   recipient: string
 ): Promise<void> {
+  console.log(`[pollAndEmail] START · ${renderIds.length} renders · recipient=${recipient}`);
   const results = await Promise.all(renderIds.map(pollUntilDone));
   const okCount = results.filter((r) => r.url).length;
   const total = results.length;
+  console.log(`[pollAndEmail] polling done · ok=${okCount}/${total}`, results);
 
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -135,6 +137,7 @@ async function pollAndEmail(
     console.log('[pollAndEmail] would have sent:', { recipient, productName, results });
     return;
   }
+  console.log('[pollAndEmail] RESEND_API_KEY present (length=' + apiKey.length + ')');
 
   let subject: string;
   let headline: string;
@@ -174,6 +177,7 @@ async function pollAndEmail(
     </div>
   `;
 
+  console.log(`[pollAndEmail] dispatching to Resend · to=${recipient} subject="${subject}"`);
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -185,11 +189,11 @@ async function pollAndEmail(
     }),
   });
 
+  const respText = await res.text();
   if (!res.ok) {
-    const text = await res.text();
-    console.error(`[pollAndEmail] resend failed ${res.status}: ${text}`);
+    console.error(`[pollAndEmail] resend failed ${res.status}: ${respText}`);
     return;
   }
 
-  console.log(`[pollAndEmail] email sent to ${recipient} (${okCount}/${total} ok)`);
+  console.log(`[pollAndEmail] email sent to ${recipient} (${okCount}/${total} ok) · resend response: ${respText.slice(0, 200)}`);
 }
