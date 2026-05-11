@@ -31,6 +31,10 @@ export interface ProcessResult {
   productInput: ProductInput;
   brandName: string;
   analysis: GeminiAnalysis;
+  // When `options.notifyEmail` is set, this resolves once polling + email send finish.
+  // Callers running under Vercel `after()` must await this; otherwise the serverless
+  // function instance can be killed before pollAndEmail completes (~30s of work).
+  pollAndEmailPromise?: Promise<void>;
 }
 
 // Bold Energy + Clean Minimal builders kept in shotstack.ts but not invoked here.
@@ -81,14 +85,17 @@ export async function processProduct(
   );
   const renderIds: string[] = [renderId];
 
+  let pollAndEmailPromise: Promise<void> | undefined;
   if (options.notifyEmail) {
     const email = options.notifyEmail;
-    void pollAndEmail(renderIds, productInput.title, brandName, email).catch((err) => {
-      console.error('[processProduct] poll/email task failed:', err);
-    });
+    pollAndEmailPromise = pollAndEmail(renderIds, productInput.title, brandName, email).catch(
+      (err) => {
+        console.error('[processProduct] poll/email task failed:', err);
+      }
+    );
   }
 
-  return { renderIds, productInput, brandName, analysis };
+  return { renderIds, productInput, brandName, analysis, pollAndEmailPromise };
 }
 
 const POLL_INTERVAL_MS = 3000;

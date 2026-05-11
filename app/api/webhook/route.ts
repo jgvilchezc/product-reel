@@ -77,12 +77,21 @@ export async function POST(req: NextRequest) {
     console.warn('[webhook] MERCHANT_EMAIL not set — videos will be rendered but not emailed');
   }
   // `after()` defers this work until the 200 OK has been sent to Shopify (inside the 5s
-  // SLA), and Vercel keeps the function alive up to `maxDuration` so pollAndEmail can
-  // finish polling Shotstack and dispatching the email.
+  // SLA), and Vercel keeps the function alive up to `maxDuration` so the full Gemini +
+  // Shotstack + pollAndEmail chain can finish. We must explicitly await the
+  // `pollAndEmailPromise` — Vercel only tracks the top-level callback, so leaving
+  // pollAndEmail as a nested void promise lets it die when processProduct resolves.
   after(async () => {
     try {
-      const { renderIds } = await processProduct(product, { geminiKey, notifyEmail });
+      const { renderIds, pollAndEmailPromise } = await processProduct(product, {
+        geminiKey,
+        notifyEmail,
+      });
       console.log(`[webhook] product ${product.id} renders submitted:`, renderIds);
+      if (pollAndEmailPromise) {
+        await pollAndEmailPromise;
+        console.log(`[webhook] product ${product.id} email pipeline complete`);
+      }
     } catch (err) {
       console.error(`[webhook] product ${product.id} pipeline failed:`, err);
     }
