@@ -1,6 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import crypto from 'crypto';
 import { processProduct, type ShopifyProduct } from '../../../lib/pipeline';
+
+// Vercel kills serverless function instances right after the response is sent, which
+// would terminate the fire-and-forget pollAndEmail promise before it can finish. Bumping
+// maxDuration + using `after()` keeps the function alive long enough for Gemini analysis
+// + Shotstack render polling + Resend email send to complete (~30-45s typical).
+export const maxDuration = 60;
 
 function validateShopifyWebhook(rawBody: string, hmacHeader: string | null): boolean {
   const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
@@ -70,14 +76,17 @@ export async function POST(req: NextRequest) {
   if (!notifyEmail) {
     console.warn('[webhook] MERCHANT_EMAIL not set — videos will be rendered but not emailed');
   }
-  void processProduct(product, { geminiKey, notifyEmail }).then(
-    ({ renderIds }) => {
+  // `after()` defers this work until the 200 OK has been sent to Shopify (inside the 5s
+  // SLA), and Vercel keeps the function alive up to `maxDuration` so pollAndEmail can
+  // finish polling Shotstack and dispatching the email.
+  after(async () => {
+    try {
+      const { renderIds } = await processProduct(product, { geminiKey, notifyEmail });
       console.log(`[webhook] product ${product.id} renders submitted:`, renderIds);
-    },
-    (err) => {
+    } catch (err) {
       console.error(`[webhook] product ${product.id} pipeline failed:`, err);
     }
-  );
+  });
 
   return new NextResponse('OK', { status: 200 });
 }

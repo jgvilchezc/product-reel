@@ -92,7 +92,10 @@ export async function processProduct(
 }
 
 const POLL_INTERVAL_MS = 3000;
-const POLL_MAX_ATTEMPTS = 40; // 2 minutes
+// Total poll budget must fit inside the webhook route's maxDuration (60s on Vercel),
+// leaving headroom for Gemini analysis + Shotstack submit + Resend email send. Cinematic
+// Showcase renders typically complete in 20-30s, so 48s is comfortable.
+const POLL_MAX_ATTEMPTS = 16; // 48 seconds
 
 async function pollUntilDone(renderId: string): Promise<{ url?: string; error?: string }> {
   for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
