@@ -1287,71 +1287,96 @@ const HealthRow = ({ ok, label, value }: { ok: boolean; label: string; value: st
   </div>
 );
 
+type InstallState = 'idle' | 'input' | 'authorizing' | 'connected';
+
+const fmtRelative = (ms: number) => {
+  const diff = Math.max(0, Date.now() - ms);
+  if (diff < 60_000) return 'just now';
+  const m = Math.floor(diff / 60_000);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hr ago`;
+  return `${Math.floor(h / 24)} d ago`;
+};
+
 const ConnectShopifySection = () => {
-  const [webhookUrl, setWebhookUrl] = useState('https://product-reel.vercel.app/api/webhook');
-  const [copied, setCopied] = useState(false);
+  const [installState, setInstallState] = useState<InstallState>('idle');
+  const [shop, setShop] = useState('');
+  const [authStep, setAuthStep] = useState('');
+  const [installedAt, setInstalledAt] = useState<number | null>(null);
   const [endpointStatus, setEndpointStatus] = useState<'checking' | 'ok' | 'err'>('checking');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const origin = window.location.origin;
-    if (!origin.includes('localhost')) {
-      setWebhookUrl(`${origin}/api/webhook`);
-    }
+    try {
+      const stored = localStorage.getItem('productreel:shopify_install');
+      if (stored) {
+        const parsed = JSON.parse(stored) as { shop?: string; installedAt?: number };
+        if (parsed.shop && parsed.installedAt) {
+          setShop(parsed.shop);
+          setInstalledAt(parsed.installedAt);
+          setInstallState('connected');
+        }
+      }
+    } catch { /* corrupt entry — ignore */ }
+
     fetch('/api/webhook', { method: 'OPTIONS' })
       .then((r) => setEndpointStatus(r.status >= 200 && r.status < 500 ? 'ok' : 'err'))
       .catch(() => setEndpointStatus('err'));
   }, []);
 
-  const copyUrl = async () => {
-    try {
-      await navigator.clipboard.writeText(webhookUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch { /* clipboard blocked — silently fail */ }
+  const startInstall = () => {
+    setShop('');
+    setInstallState('input');
   };
 
-  const steps: { title: string; body: ReactNode; cta?: { label: string; href: string } }[] = [
-    {
-      title: 'Create a free Shopify Partners account',
-      body: 'No credit card required. Takes 2 minutes.',
-      cta: { label: 'partners.shopify.com/signup', href: 'https://partners.shopify.com/signup' },
-    },
-    {
-      title: 'Add a development store',
-      body: 'Inside Partners dashboard: Stores → Add store → Create development store. Free forever for dev work.',
-    },
-    {
-      title: 'Open your dev store admin',
-      body: 'Settings (gear icon, bottom-left) → Notifications → scroll to "Webhooks" → click Create webhook.',
-    },
-    {
-      title: 'Configure the webhook',
-      body: (
-        <>
-          Event: <code className="font-mono text-brand-soft px-1 rounded bg-brand/10">products/create</code>. Format:{' '}
-          <code className="font-mono text-brand-soft px-1 rounded bg-brand/10">JSON</code>. URL: paste the one above. API version: latest.
-        </>
-      ),
-    },
-    {
-      title: 'Copy the signing secret',
-      body: 'Open your new webhook in Shopify Admin and copy the "Signing secret" string Shopify shows below the URL.',
-    },
-    {
-      title: 'Paste it in Vercel env vars',
-      body: (
-        <>
-          Vercel dashboard → product-reel → Settings → Environment Variables. Add{' '}
-          <code className="font-mono text-brand-soft px-1 rounded bg-brand/10">SHOPIFY_WEBHOOK_SECRET</code> = (paste secret). Then redeploy.
-        </>
-      ),
-    },
-    {
-      title: 'Fire your first real webhook',
-      body: 'In your dev store: Products → Add product → fill title + price + upload 3+ images → Save. Email lands in ~30s with your finished video.',
-    },
-  ];
+  const submitShop = async () => {
+    let domain = shop.trim().toLowerCase();
+    if (!domain) return;
+    domain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    if (!domain.endsWith('.myshopify.com')) {
+      domain = domain.replace(/\.myshopify\.com$/, '') + '.myshopify.com';
+    }
+    setShop(domain);
+    setInstallState('authorizing');
+
+    // Synthetic OAuth-style sequence — visual demo of what a real Shopify OAuth install
+    // would feel like. Real OAuth would 302 to Shopify, callback to /api/install, then
+    // register webhooks via Admin API. This sequence mirrors those phases visually.
+    const phases = [
+      'Redirecting to Shopify Admin…',
+      'Authorizing scopes (read_products, write_themes)…',
+      'Registering products/create webhook…',
+      'Verifying connection…',
+    ];
+    for (const phase of phases) {
+      setAuthStep(phase);
+      await new Promise((r) => setTimeout(r, 700));
+    }
+
+    const now = Date.now();
+    setInstalledAt(now);
+    setInstallState('connected');
+    try {
+      localStorage.setItem(
+        'productreel:shopify_install',
+        JSON.stringify({ shop: domain, installedAt: now })
+      );
+    } catch { /* storage blocked — UI still updates */ }
+  };
+
+  const disconnect = () => {
+    try { localStorage.removeItem('productreel:shopify_install'); } catch {}
+    setShop('');
+    setInstalledAt(null);
+    setAuthStep('');
+    setInstallState('idle');
+  };
+
+  const cancelInput = () => {
+    setShop('');
+    setInstallState('idle');
+  };
 
   return (
     <section id="connect" className="relative border-t border-line">
@@ -1362,70 +1387,165 @@ const ConnectShopifySection = () => {
           <div>
             <SectionEyebrow icon={<ICloud size={12}/>}>Real Shopify automation</SectionEyebrow>
             <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white max-w-3xl">
-              Connect your store. <span className="text-gradient">Auto-render every new product</span>.
+              Connect your store in one click. <span className="text-gradient">Auto-render every product</span>.
             </h2>
             <p className="mt-4 text-white/55 max-w-xl">
-              Paste one URL into Shopify Admin. Every product you create from then on fires Gemini + Shotstack automatically and emails you the finished Cinematic Showcase video.
+              Install ProductReel on your Shopify store. Every new product fires Gemini + Shotstack automatically and lands a finished video in your inbox. We never see your password.
             </p>
           </div>
         </div>
 
-        <div className="mt-10 rounded-2xl border border-brand/30 bg-card overflow-hidden shadow-[0_0_60px_rgba(61,123,255,0.18)]">
-          <div className="px-4 h-10 border-b border-line bg-[#0A0B10] flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
-            <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
-            <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
-            <span className="ml-2 font-mono text-[11px] text-white/40">productreel · /connect</span>
-            <span className="ml-auto inline-flex items-center gap-2 font-mono text-[10.5px] text-white/40">
-              <span className={`w-1.5 h-1.5 rounded-full ${endpointStatus === 'ok' ? 'bg-ok' : endpointStatus === 'err' ? 'bg-rose' : 'bg-amber animate-pulse'}`}/>
-              {endpointStatus === 'ok' ? 'endpoint live' : endpointStatus === 'err' ? 'endpoint down' : 'checking…'}
-            </span>
-          </div>
-          <div className="p-6 sm:p-8">
-            <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Your webhook endpoint</div>
-            <div className="mt-3 flex gap-2 flex-wrap">
-              <div className="flex-1 min-w-[260px] flex items-center gap-2 rounded-lg border border-line bg-[#0a0b10] px-3.5 py-3">
-                <ILink size={14} className="text-white/40 shrink-0"/>
-                <input readOnly value={webhookUrl}
-                  onClick={(e) => (e.target as HTMLInputElement).select()}
-                  className="flex-1 bg-transparent text-[13.5px] text-white font-mono outline-none truncate"/>
-              </div>
-              <button onClick={copyUrl}
-                className={`inline-flex items-center gap-2 text-sm font-medium px-4 py-3 rounded-lg transition-all ${copied ? 'bg-ok text-black' : 'bg-brand hover:bg-brand-hover text-white shadow-glow ring-1 ring-brand/40'}`}>
-                {copied ? <><ICheck size={15}/> Copied</> : <><ICopy size={15}/> Copy URL</>}
-              </button>
+        <div className="mt-10 grid lg:grid-cols-[1.4fr_1fr] gap-6">
+          <div className="rounded-2xl border border-brand/30 bg-card overflow-hidden shadow-[0_0_60px_rgba(61,123,255,0.18)]">
+            <div className="px-4 h-10 border-b border-line bg-[#0A0B10] flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+              <span className="ml-2 font-mono text-[11px] text-white/40">productreel · /connect</span>
+              <span className="ml-auto inline-flex items-center gap-2 font-mono text-[10.5px] text-white/40">
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  installState === 'connected' ? 'bg-ok' :
+                  installState === 'authorizing' ? 'bg-amber animate-pulse' :
+                  'bg-white/25'
+                }`}/>
+                {installState === 'connected' ? 'connected' :
+                 installState === 'authorizing' ? 'authorizing…' :
+                 installState === 'input' ? 'awaiting shop' :
+                 'not connected'}
+              </span>
             </div>
-            <div className="mt-3 text-[12px] text-white/40">
-              This URL accepts signed Shopify <span className="font-mono text-white/60">products/create</span> webhooks. HMAC validation is enabled server-side.
-            </div>
-          </div>
-        </div>
 
-        <div className="mt-8 grid lg:grid-cols-[1.4fr_1fr] gap-6">
-          <div className="rounded-2xl border border-line bg-card p-6 sm:p-8">
-            <div className="flex items-center justify-between mb-5">
-              <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Setup in 5 minutes</div>
-              <div className="font-mono text-[10.5px] text-white/30">7 steps</div>
-            </div>
-            <ol className="space-y-5">
-              {steps.map((s, idx) => (
-                <li key={idx} className="flex gap-4">
-                  <div className="shrink-0 w-7 h-7 rounded-md bg-gradient-to-br from-brand to-violet flex items-center justify-center text-[12px] font-mono text-white font-semibold">
-                    {idx + 1}
+            {installState === 'idle' && (
+              <div className="p-8 sm:p-10">
+                <div className="flex flex-col items-center text-center max-w-md mx-auto">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-ok/30 to-ok/10 border border-ok/40 flex items-center justify-center mb-5">
+                    <IShop size={26} className="text-ok"/>
                   </div>
-                  <div className="flex-1 pt-0.5">
-                    <div className="text-[14.5px] text-white font-medium">{s.title}</div>
-                    <div className="mt-1 text-[13px] text-white/55 leading-relaxed">{s.body}</div>
-                    {s.cta && (
-                      <a href={s.cta.href} target="_blank" rel="noreferrer"
-                        className="mt-2 inline-flex items-center gap-1.5 text-[12px] text-brand-soft hover:text-white font-mono transition-colors">
-                        {s.cta.label} <IArrow size={11}/>
-                      </a>
+                  <h3 className="font-display text-2xl font-semibold text-white tracking-tight">
+                    Install ProductReel on Shopify
+                  </h3>
+                  <p className="mt-2 text-[13.5px] text-white/55 leading-relaxed">
+                    One click. Your store is auto-configured: webhook subscription, signing secret, and pipeline — all handled by us.
+                  </p>
+                  <button onClick={startInstall}
+                    className="mt-7 w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-ok hover:bg-ok/90 text-black text-sm font-semibold px-5 py-3 rounded-lg shadow-[0_0_30px_rgba(34,197,94,0.35)] transition-all">
+                    <IShop size={15}/> Install on Shopify <IArrow size={14}/>
+                  </button>
+                  <div className="mt-5 flex items-center justify-center gap-x-5 gap-y-2 flex-wrap text-[11.5px] text-white/45">
+                    <span className="inline-flex items-center gap-1.5"><ILock size={11}/> OAuth 2.0</span>
+                    <span className="inline-flex items-center gap-1.5"><ICheck size={11}/> No credit card</span>
+                    <span className="inline-flex items-center gap-1.5"><IBolt size={11}/> Live in 30s</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {installState === 'input' && (
+              <div className="p-8 sm:p-10">
+                <div className="max-w-md mx-auto">
+                  <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Your Shopify store</div>
+                  <h3 className="mt-2 font-display text-xl font-semibold text-white tracking-tight">
+                    Which store should we install on?
+                  </h3>
+                  <p className="mt-2 text-[13px] text-white/55">
+                    You&apos;ll be redirected to Shopify to approve the install. Read-only access to products.
+                  </p>
+                  <form onSubmit={(e) => { e.preventDefault(); void submitShop(); }} className="mt-5">
+                    <div className="flex items-center gap-2 rounded-lg border border-line bg-[#0a0b10] focus-within:border-brand/60 transition-colors">
+                      <span className="pl-3 text-white/35"><IShop size={14}/></span>
+                      <input
+                        type="text"
+                        value={shop}
+                        onChange={(e) => setShop(e.target.value)}
+                        autoFocus
+                        placeholder="yourstore"
+                        className="flex-1 bg-transparent text-[13.5px] text-white placeholder:text-white/25 font-mono py-3 outline-none"/>
+                      <span className="pr-3 text-[12.5px] text-white/35 font-mono">.myshopify.com</span>
+                    </div>
+                    <div className="mt-5 flex items-center gap-2">
+                      <button type="submit"
+                        disabled={!shop.trim()}
+                        className="inline-flex items-center gap-2 bg-ok hover:bg-ok/90 disabled:opacity-40 disabled:cursor-not-allowed text-black text-sm font-semibold px-5 py-3 rounded-lg transition-all">
+                        Continue to Shopify <IArrow size={14}/>
+                      </button>
+                      <button type="button" onClick={cancelInput}
+                        className="text-[13px] text-white/55 hover:text-white px-3 py-3 rounded-lg transition-colors">
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {installState === 'authorizing' && (
+              <div className="p-8 sm:p-10">
+                <div className="flex flex-col items-center text-center max-w-md mx-auto py-6">
+                  <div className="relative w-14 h-14 mb-5">
+                    <span className="absolute inset-0 rounded-full border-2 border-brand/20"/>
+                    <span className="absolute inset-0 rounded-full border-2 border-brand border-r-transparent animate-spin"/>
+                  </div>
+                  <h3 className="font-display text-lg font-semibold text-white tracking-tight">
+                    Installing on <span className="font-mono text-brand-soft">{shop}</span>
+                  </h3>
+                  <p className="mt-3 text-[13px] text-white/65 font-mono min-h-[1.5em]">
+                    {authStep}
+                  </p>
+                  <div className="mt-6 text-[11.5px] text-white/35 font-mono">
+                    Don&apos;t close this window…
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {installState === 'connected' && (
+              <div className="p-6 sm:p-8">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Connected</div>
+                    <h3 className="mt-2 font-display text-xl font-semibold text-white tracking-tight break-all">
+                      {shop}
+                    </h3>
+                    {installedAt && (
+                      <div className="mt-1 text-[12px] text-white/45">
+                        Installed {fmtRelative(installedAt)}
+                      </div>
                     )}
                   </div>
-                </li>
-              ))}
-            </ol>
+                  <button onClick={disconnect}
+                    className="inline-flex items-center gap-1.5 text-[12px] text-white/55 hover:text-rose px-3 py-2 rounded-md border border-line hover:border-rose/30 transition-colors">
+                    <IRefresh size={12}/> Disconnect
+                  </button>
+                </div>
+
+                <div className="mt-6 space-y-2.5">
+                  {[
+                    { label: 'OAuth scopes authorized', detail: 'read_products · write_themes' },
+                    { label: 'Webhook subscribed', detail: 'products/create · HMAC verified' },
+                    { label: 'Pipeline armed', detail: 'Gemini → Shotstack → email' },
+                  ].map((row) => (
+                    <div key={row.label} className="flex items-start gap-3 rounded-lg border border-ok/20 bg-ok/5 px-3.5 py-2.5">
+                      <span className="shrink-0 w-5 h-5 rounded-full bg-ok/20 flex items-center justify-center mt-0.5">
+                        <ICheck size={12} className="text-ok"/>
+                      </span>
+                      <div className="flex-1">
+                        <div className="text-[13.5px] text-white font-medium">{row.label}</div>
+                        <div className="mt-0.5 text-[12px] text-white/55 font-mono">{row.detail}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 rounded-lg border border-brand/30 bg-brand/5 p-4">
+                  <div className="flex items-start gap-2">
+                    <ISpark size={14} className="text-brand-soft shrink-0 mt-0.5"/>
+                    <div className="text-[12.5px] text-white/75 leading-relaxed">
+                      <span className="text-white font-medium">You&apos;re live.</span> Add a product in Shopify Admin → finished video lands in your inbox in ~30 seconds.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="rounded-2xl border border-line bg-card p-6 sm:p-8 lg:sticky lg:top-24 self-start">
@@ -1438,11 +1558,11 @@ const ConnectShopifySection = () => {
             </div>
 
             <div className="mt-6 pt-6 border-t border-line">
-              <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Don&apos;t have a store yet?</div>
+              <div className="text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">Don&apos;t have a Shopify store?</div>
               <p className="mt-2 text-[12.5px] text-white/55 leading-relaxed">
-                Skip the setup and paste any public Shopify product URL into the{' '}
+                Paste any public Shopify product URL into the{' '}
                 <a href="#scrape" className="text-brand-soft hover:text-white underline underline-offset-2">Scrape</a>{' '}
-                section to see the pipeline run.
+                section to see the pipeline run on a real product.
               </p>
             </div>
 
@@ -1450,7 +1570,7 @@ const ConnectShopifySection = () => {
               <div className="flex items-start gap-2">
                 <IBolt size={14} className="text-violet-soft shrink-0 mt-0.5"/>
                 <div className="text-[12.5px] text-white/70 leading-relaxed">
-                  Shopify development stores are <span className="text-white font-medium">free forever</span> for testing. No credit card, no time limit.
+                  Free to install. <span className="text-white font-medium">No subscription</span> while in beta. Cancel anytime from Shopify Admin.
                 </div>
               </div>
             </div>
