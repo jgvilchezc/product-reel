@@ -119,15 +119,30 @@ async function sendEmail(opts: {
 }
 
 export async function POST(req: NextRequest) {
+  // Aggressive logging FIRST so we see every incoming POST even if parsing fails.
+  // Used to diagnose whether Shotstack stage tier even fires callbacks.
+  const rawBody = await req.text();
+  const headersList: Record<string, string> = {};
+  req.headers.forEach((value, key) => {
+    headersList[key] = value;
+  });
+  console.log('[shotstack-callback] RAW INCOMING', JSON.stringify({
+    url: req.nextUrl.toString(),
+    headers: headersList,
+    bodyLen: rawBody.length,
+    bodyPreview: rawBody.slice(0, 500),
+  }));
+
   let body: ShotstackCallbackBody = {};
   try {
-    body = (await req.json()) as ShotstackCallbackBody;
+    body = JSON.parse(rawBody) as ShotstackCallbackBody;
   } catch {
-    return NextResponse.json({ error: 'Body must be JSON' }, { status: 400 });
+    console.warn('[shotstack-callback] body was not JSON, returning 400');
+    return NextResponse.json({ error: 'Body must be JSON', received: rawBody.slice(0, 200) }, { status: 400 });
   }
 
   const result = extractRenderResult(body);
-  console.log('[shotstack-callback] received', JSON.stringify({ ...result, action: body.action, type: body.type }));
+  console.log('[shotstack-callback] parsed', JSON.stringify({ ...result, action: body.action, type: body.type }));
 
   // Merchant context comes from the query string we set on the callback URL.
   const email = req.nextUrl.searchParams.get('email');
