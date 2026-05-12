@@ -83,16 +83,24 @@ export async function POST(req: NextRequest) {
   // pollAndEmail as a nested void promise lets it die when processProduct resolves.
   after(async () => {
     try {
-      // Nano Banana enhancement enabled — now that source images are capped at 5
-      // (pipeline.ts shopifyToProductInput), the 5-parallel Nano Banana call adds
-      // ~8-12s and we still fit inside Vercel's 60s budget with ~5-10s of margin.
-      // Quality improvement on low-res Shopify CDN sources is significant.
-      // If we ever start seeing email timeouts again, the first thing to revert
-      // is this flag — pipeline gracefully falls back to original URLs per image.
+      // Nano Banana enhancement DISABLED on webhook flow for email reliability.
+      // Background: we briefly enabled it (May 12 commit 702d66b) thinking the
+      // latency budget fit after dropping the source-image cap to 5. It didn't,
+      // but the bug was masked because uploadImageToIngest was broken and silently
+      // fell back to original URLs in ~0.5s. Once the Ingest fix landed (commit
+      // a599014), Nano Banana actually started working — and added 15-25s to the
+      // pre-poll phase, pushing total runtime past Vercel Hobby's 60s ceiling.
+      // The Lavadora render that triggered this revert: completed in Shotstack
+      // but the lambda died before pollAndEmail saw "done" and could send the
+      // merchant their email. (User-flagged May 12.)
+      //
+      // The webhook prioritizes "render submitted + merchant emailed" reliability
+      // over per-image enhancement. Users who want Nano Banana can trigger it
+      // explicitly via /api/scrape?enhance=true where the 60s ceiling is more
+      // forgiving (no pollAndEmail latency to contend with).
       const { renderIds, pollAndEmailPromise } = await processProduct(product, {
         geminiKey,
         notifyEmail,
-        enhanceImagesOption: true,
       });
       console.log(`[webhook] product ${product.id} renders submitted:`, renderIds);
       if (pollAndEmailPromise) {
