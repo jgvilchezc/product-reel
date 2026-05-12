@@ -295,14 +295,13 @@ export function getTextOverlayAdjustments(analysis: GeminiAnalysis): TextOverlay
 }
 
 export async function analyzeProduct(product: ProductInput, geminiKey: string): Promise<GeminiAnalysis> {
-  // Send ALL images (up to 7 — the Cinematic Showcase ceiling) so Gemini can return
-  // image_priority. Failed fetches are dropped silently; if every image fails we fall
-  // back. Previously this function only sent images[0], which meant Gemini had no way
-  // to rank shots and the pipeline used Shopify's source order — frequently leading
-  // to "sole closeup as hero" since Shopify product pages sometimes upload detail
-  // shots first.
+  // Send up to 5 images so Gemini can return image_priority. The cap matches
+  // pipeline.ts's shopifyToProductInput slice — see that comment for the full
+  // Vercel-Hobby-timeout rationale. Failed fetches are dropped silently; if every
+  // image fails we fall back. Previously this function only sent images[0], which
+  // meant Gemini had no way to rank shots.
   const imageResults = await Promise.allSettled(
-    product.images.slice(0, 7).map((url) => imageUrlToInlineData(shrinkUrl(url)))
+    product.images.slice(0, 5).map((url) => imageUrlToInlineData(shrinkUrl(url)))
   );
   const imageParts = imageResults
     .filter(

@@ -55,14 +55,22 @@ export function shopifyToProductInput(product: ShopifyProduct): {
   const rawPrice = product.variants?.[0]?.price ?? '0';
   const price = parseFloat(rawPrice).toFixed(0);
 
-  // Cinematic Showcase uses up to 7 images; Bold Energy & Clean Minimal cap at 5 internally.
-  // Returns the UNIQUE images only — no longer pads with duplicates. Padding is done
-  // downstream in processProduct after Gemini reorders by ad-priority, so the cycling
-  // happens with the best ordering rather than the raw Shopify order.
+  // Source images are capped at 5 before they reach Gemini OR Shotstack. Reasons:
+  //   1. Vercel Hobby's 60s maxDuration on /api/webhook. Each extra source image adds
+  //      ~1-2s of Gemini latency (multi-image analysis) and ~0.5-1s of Shotstack
+  //      submit latency (CDN fetch). At 10 source images we routinely blew the
+  //      budget — render completed but Vercel killed the lambda before pollAndEmail
+  //      could send the merchant their video. (User-flagged, May 12.)
+  //   2. The Cinematic Showcase template has 7 image slots. cyclicPadToSeven fills
+  //      them from the 5 unique sources: [a,b,c,d,e,a,b] — visually 7 distinct
+  //      scenes since the cycle wraps to the hero shot, not a closeup detail.
+  //   3. Merchant order on Shopify is usually best-first, so the first 5 cover the
+  //      most important angles. Gemini still ranks within those 5 via image_priority.
+  // Bump to 10 if we ever move to Vercel Pro (300s maxDuration).
   const imageUrls = (product.images || [])
     .map((i) => i.src)
     .filter((s): s is string => typeof s === 'string' && s.length > 0)
-    .slice(0, 7);
+    .slice(0, 5);
 
   if (imageUrls.length === 0) {
     throw new Error('No product images found');
