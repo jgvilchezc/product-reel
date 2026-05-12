@@ -795,33 +795,76 @@ async function pollIngestSourceUntilReady(sourceId: string, maxAttempts = 20, in
   throw new Error(`Ingest source ${sourceId} did not become ready in ${maxAttempts * intervalMs}ms`);
 }
 
+interface IngestUploadResponse {
+  data?: {
+    type?: string;
+    id?: string;
+    attributes?: { url?: string; filename?: string };
+  };
+}
+
 /**
  * Uploads a data URI (Nano Banana base64 output) to Shotstack Ingest, which hosts it
  * on their CDN and returns a public HTTPS URL usable by the Edit API's render clips.
  *
- * Shotstack Ingest is async: POST /sources returns an ID; we must then poll
- * GET /sources/{id} until attributes.status === 'ready' to read back the hosted URL.
+ * Three-step workflow per Shotstack docs:
+ *   1. POST /ingest/stage/upload { filename } → response.data.attributes.url is a
+ *      presigned S3 PUT URL; response.data.id becomes the source id.
+ *   2. PUT raw bytes to that presigned URL with Content-Type: application/octet-stream.
+ *   3. Poll GET /ingest/stage/sources/{id} until attributes.status === 'ready', then
+ *      read attributes.source for the public CDN URL.
  *
- * Previously this function pointed at /edit/stage/upload (404 — wrong path) and tried
- * to read `data.response.attributes.url` from the immediate response (wrong shape).
- * Both bugs combined caused enhanceImages to silently fall back to original URLs in
- * every call. Discovered May 12.
+ * History: this used to POST to /edit/stage/upload (404) and read a non-existent
+ * shape, so Nano Banana enhancement silently fell back to original URLs in every
+ * call. Then we tried /ingest/stage/sources with the full data URI inline, which
+ * blew DynamoDB's 400KB item size on most images. The signed-URL pattern below is
+ * the correct path for binary uploads. Fixed May 12.
  */
 export async function uploadImageToIngest(dataUri: string): Promise<string> {
-  const postRes = await fetch(`${SHOTSTACK_INGEST_BASE}/sources`, {
+  // Parse "data:image/png;base64,..." → mime + raw bytes
+  const commaIdx = dataUri.indexOf(',');
+  if (commaIdx < 0) throw new Error('uploadImageToIngest: invalid data URI');
+  const header = dataUri.slice(0, commaIdx);
+  const base64 = dataUri.slice(commaIdx + 1);
+  const mimeMatch = header.match(/data:([^;]+);/);
+  const mime = mimeMatch?.[1] || 'image/png';
+  const ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/webp' ? 'webp' : 'png';
+  const filename = `enhance-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+  // Step 1: request a presigned S3 PUT URL
+  const uploadRes = await fetch(`${SHOTSTACK_INGEST_BASE}/upload`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
-    body: JSON.stringify({ url: dataUri }),
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'x-api-key': API_KEY,
+    },
+    body: JSON.stringify({ filename }),
   });
-  if (!postRes.ok) {
-    const err = await postRes.text();
-    throw new Error(`Shotstack ingest POST error ${postRes.status}: ${err.slice(0, 200)}`);
+  if (!uploadRes.ok) {
+    const err = await uploadRes.text();
+    throw new Error(`Shotstack signed-upload request ${uploadRes.status}: ${err.slice(0, 200)}`);
   }
-  const postData = (await postRes.json()) as IngestSourceResponse;
-  const sourceId = postData.data?.id;
-  if (!sourceId) {
-    throw new Error('Shotstack ingest POST returned no source id');
+  const uploadData = (await uploadRes.json()) as IngestUploadResponse;
+  const presignedUrl = uploadData.data?.attributes?.url;
+  const sourceId = uploadData.data?.id;
+  if (!presignedUrl || !sourceId) {
+    throw new Error('Shotstack signed-upload response missing url or id');
   }
+
+  // Step 2: PUT the raw image bytes to the presigned S3 URL
+  const bytes = Buffer.from(base64, 'base64');
+  const putRes = await fetch(presignedUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: bytes,
+  });
+  if (!putRes.ok) {
+    const err = await putRes.text();
+    throw new Error(`Shotstack S3 PUT ${putRes.status}: ${err.slice(0, 200)}`);
+  }
+
+  // Step 3: poll the source record until Shotstack reports it ingested
   return pollIngestSourceUntilReady(sourceId);
 }
 
