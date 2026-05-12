@@ -119,3 +119,39 @@ export async function enhanceImages(
     })
   );
 }
+
+export interface EnhanceImageDiagnostic {
+  original: string;
+  enhanced: string | null;
+  fellBack: boolean;
+  error?: string;
+}
+
+/**
+ * Same pipeline as enhanceImages but returns per-image diagnostic info instead of
+ * silently swallowing errors. Used by /api/diag-enhance for quality-comparison work
+ * during stress tests so we can see WHY a given enhance failed (Gemini auth error,
+ * unsupported source format, Shotstack ingest rejection, etc.) without combing
+ * through Vercel runtime logs.
+ */
+export async function enhanceImagesDiagnostic(
+  images: string[],
+  category: ProductCategory,
+  geminiKey: string
+): Promise<EnhanceImageDiagnostic[]> {
+  const prompt = pickPrompt(category);
+
+  return Promise.all(
+    images.map(async (originalUrl): Promise<EnhanceImageDiagnostic> => {
+      try {
+        const { data, mime_type } = await callNanoBanana(originalUrl, prompt, geminiKey);
+        const dataUri = `data:${mime_type};base64,${data}`;
+        const enhanced = await uploadImageToIngest(dataUri);
+        return { original: originalUrl, enhanced, fellBack: false };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { original: originalUrl, enhanced: null, fellBack: true, error: msg };
+      }
+    })
+  );
+}

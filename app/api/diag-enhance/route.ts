@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { enhanceImages } from '../../../lib/imageEnhance';
+import { enhanceImagesDiagnostic } from '../../../lib/imageEnhance';
 import type { ProductCategory } from '../../../lib/gemini';
 
 // Diagnostic endpoint that exposes Nano Banana enhancement on individual images so we
@@ -54,17 +54,7 @@ export async function POST(req: NextRequest) {
     : 'footwear';
 
   try {
-    const enhanced = await enhanceImages(body.imageUrls, category, geminiKey);
-    // enhanceImages falls back to the original URL when Nano Banana fails for a single
-    // image. So `enhanced[i] === original[i]` means "this one was not actually enhanced".
-    const results = body.imageUrls.map((original, i) => {
-      const out = enhanced[i];
-      return {
-        original,
-        enhanced: out === original ? null : out,
-        fellBack: out === original,
-      };
-    });
+    const results = await enhanceImagesDiagnostic(body.imageUrls, category, geminiKey);
     return NextResponse.json({
       category,
       count: results.length,
