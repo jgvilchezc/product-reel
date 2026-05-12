@@ -64,7 +64,7 @@ const Navbar = () => (
         <a href="#chat"         className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">AI Director</a>
         <a href="#setup"        className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">Setup</a>
         <a href="#demo"         className="text-[13px] text-white/85 hover:text-white px-3 py-2 rounded-lg border border-line hover:border-line2 transition-colors">View demo</a>
-        <a href="#waitlist"     className="text-[13px] font-medium text-white bg-brand hover:bg-brand-hover px-3.5 py-2 rounded-lg shadow-glow-sm hover:shadow-glow transition-all">Get early access</a>
+        <a href="#backfill"     className="text-[13px] font-medium text-white bg-brand hover:bg-brand-hover px-3.5 py-2 rounded-lg shadow-glow-sm hover:shadow-glow transition-all">Backfill catalog</a>
       </nav>
     </div>
   </header>
@@ -714,13 +714,18 @@ const ChatSection = () => {
       <div className="relative max-w-6xl mx-auto px-6 py-20 sm:py-28">
         <div className="grid lg:grid-cols-[1.1fr_1.4fr] gap-10 items-start">
           <div className="lg:sticky lg:top-24">
-            <SectionEyebrow icon={<IMessage size={12}/>}>AI Director</SectionEyebrow>
+            <div className="inline-flex items-center gap-2">
+              <SectionEyebrow icon={<IMessage size={12}/>}>AI Director</SectionEyebrow>
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-violet/15 border border-violet/40 text-violet-soft font-mono text-[10px] uppercase tracking-[0.18em]">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet animate-pulse"/>coming soon
+              </span>
+            </div>
             <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white">
               None of the templates feel right?{' '}
               <span className="text-gradient-violet">Just describe it.</span>
             </h2>
             <p className="mt-4 text-white/60 max-w-md">
-              Tell the Director how you want it to feel. Reference moods, films, color palettes. Skip the template jargon. It re-cuts the video to match.
+              The Director will let you brief the video like you would a creative producer — mood, palette, references. Re-cut on demand. The chat below is a preview of the interface; the model-driven re-cut lands in the next sprint.
             </p>
             <ul className="mt-6 space-y-2 text-[13.5px] text-white/65">
               {['Talk like you would to a creative producer.','Reference moods or films, not effects.','One brief, one re-render. Iterate until it clicks.'].map(x => (
@@ -834,37 +839,220 @@ const SetupSection = () => {
 };
 
 // ── WAITLIST ───────────────────────────────────────────────────
-const Waitlist = () => {
-  const [email, setEmail]         = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  const submit = (e: React.FormEvent) => { e.preventDefault(); if (!email.includes('@')) return; setSubmitted(true); setEmail(''); };
+// ── BACKFILL ───────────────────────────────────────────────────
+// Replaces the legacy Waitlist email form. Calls POST /api/backfill which enumerates
+// the store's public products.json and submits the first 5 to the render pipeline.
+// After submit, polls each renderId in parallel for status. Surfaces the JSON-required
+// limitation upfront so the user understands why some stores will reject.
+type BackfillStep = 'input' | 'submitting' | 'rendering' | 'error';
+type RenderState = 'queued' | 'fetching' | 'rendering' | 'saving' | 'done' | 'failed';
+interface BackfillProduct { title: string; handle: string; renderId: string; productUrl: string; }
+interface BackfillResponse {
+  success: boolean;
+  store?: string;
+  totalInCatalog?: number;
+  submitted?: number;
+  failed?: number;
+  products?: BackfillProduct[];
+  errors?: Array<{ reason: string }>;
+  error?: string;
+}
+
+const STATE_BADGE: Record<RenderState, { label: string; cls: string }> = {
+  queued:    { label: 'queued',    cls: 'bg-white/8 text-white/55 border-white/15' },
+  fetching:  { label: 'fetching',  cls: 'bg-amber/10 text-amber border-amber/40' },
+  rendering: { label: 'rendering', cls: 'bg-brand/10 text-brand-soft border-brand/40' },
+  saving:    { label: 'saving',    cls: 'bg-violet/10 text-violet-soft border-violet/40' },
+  done:      { label: 'ready',     cls: 'bg-ok/10 text-ok border-ok/40' },
+  failed:    { label: 'failed',    cls: 'bg-red-500/10 text-red-400 border-red-500/40' },
+};
+
+const SAMPLE_STORES = ['https://drinkolipop.com', 'https://www.allbirds.com', 'https://feastables.com'];
+
+const BackfillSection = () => {
+  const [storeUrl, setStoreUrl] = useState(SAMPLE_STORES[0]);
+  const [step, setStep] = useState<BackfillStep>('input');
+  const [products, setProducts] = useState<BackfillProduct[]>([]);
+  const [statuses, setStatuses] = useState<Record<string, RenderState>>({});
+  const [videoUrls, setVideoUrls] = useState<Record<string, string>>({});
+  const [meta, setMeta] = useState<{ store: string; total: number; failed: number; errors: Array<{ reason: string }> } | null>(null);
+  const [error, setError] = useState('');
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  const start = async () => {
+    const trimmed = storeUrl.trim();
+    if (!trimmed) { setError('Paste a Shopify store URL'); return; }
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    setStep('submitting'); setError(''); setProducts([]); setStatuses({}); setVideoUrls({}); setMeta(null);
+
+    try {
+      const res = await fetch('/api/backfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeUrl: trimmed, limit: 5 }),
+      });
+      const data = (await res.json()) as BackfillResponse;
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Backfill failed');
+      }
+      const items = data.products ?? [];
+      setProducts(items);
+      setMeta({ store: data.store ?? trimmed, total: data.totalInCatalog ?? items.length, failed: data.failed ?? 0, errors: data.errors ?? [] });
+      setStatuses(Object.fromEntries(items.map((p) => [p.renderId, 'rendering' as RenderState])));
+      setStep('rendering');
+
+      // Poll each renderId in parallel until done/failed. One interval, all renderIds.
+      pollRef.current = setInterval(async () => {
+        const pending = items.filter((p) => {
+          const s = statuses[p.renderId];
+          return s !== 'done' && s !== 'failed';
+        });
+        if (pending.length === 0 && pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; return; }
+        await Promise.all(items.map(async (p) => {
+          try {
+            const r = await fetch(`/api/status/${p.renderId}`).then((rr) => rr.json());
+            const st = (r.status as RenderState) ?? 'queued';
+            setStatuses((prev) => ({ ...prev, [p.renderId]: st }));
+            if (st === 'done' && r.url) setVideoUrls((prev) => ({ ...prev, [p.renderId]: r.url as string }));
+          } catch { /* keep polling */ }
+        }));
+      }, 4000);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg); setStep('error');
+    }
+  };
+
+  const reset = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    setStep('input'); setProducts([]); setStatuses({}); setVideoUrls({}); setMeta(null); setError('');
+  };
+
+  const allDone = products.length > 0 && products.every((p) => statuses[p.renderId] === 'done' || statuses[p.renderId] === 'failed');
+
   return (
-    <section id="waitlist" className="border-t border-line">
-      <div className="max-w-6xl mx-auto px-6 py-20 sm:py-28">
-        <div className="relative overflow-hidden rounded-3xl border border-line bg-card px-6 sm:px-12 py-14 sm:py-20 text-center">
-          <div className="absolute inset-0 pointer-events-none"
-               style={{ background: 'radial-gradient(60% 80% at 50% 0%,rgba(61,123,255,0.22),transparent 60%),radial-gradient(40% 60% at 50% 100%,rgba(124,92,255,0.20),transparent 60%)' }}/>
-          <div className="relative">
-            <SectionEyebrow icon={<IMoon size={12}/>}>Early access</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white max-w-3xl mx-auto">
-              The next product you upload could come with a video.
-            </h2>
-            <p className="mt-4 text-white/55 max-w-xl mx-auto">First 10 videos are free. We&apos;ll email you the moment your store is in.</p>
-            {!submitted ? (
-              <form onSubmit={submit} className="mt-8 mx-auto max-w-md flex flex-col sm:flex-row items-stretch gap-2">
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@store.com"
-                       className="flex-1 bg-[#0E0F14] border border-line focus:border-brand/60 focus-ring text-sm text-white placeholder:text-white/30 px-4 py-3 rounded-lg transition-colors"/>
-                <button type="submit" className="bg-brand hover:bg-brand-hover text-white text-sm font-medium px-5 py-3 rounded-lg shadow-glow-sm hover:shadow-glow ring-1 ring-brand/40 transition-all whitespace-nowrap">
-                  Notify me
-                </button>
-              </form>
-            ) : (
-              <div className="mt-8 inline-flex items-center gap-2 rounded-lg border border-ok/40 bg-ok/10 text-ok px-4 py-3 text-sm">
-                <ICheck size={15}/> You&apos;re on the list. We&apos;ll be in touch.
-              </div>
-            )}
-            <div className="mt-4 text-[12px] text-white/40 font-mono">no credit card · cancel anytime · built on Shotstack</div>
+    <section id="backfill" className="relative border-t border-line">
+      <div className="absolute inset-0 pointer-events-none"
+           style={{ background: 'radial-gradient(60% 80% at 50% 0%,rgba(61,123,255,0.20),transparent 60%),radial-gradient(40% 60% at 50% 100%,rgba(124,92,255,0.18),transparent 60%)' }}/>
+      <div className="relative max-w-6xl mx-auto px-6 py-20 sm:py-28">
+        <div className="text-center">
+          <SectionEyebrow icon={<ILayers size={12}/>}>Backfill existing catalog</SectionEyebrow>
+          <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white max-w-3xl mx-auto">
+            Already have a store? <span className="text-gradient">Render your catalog right now</span>.
+          </h2>
+          <p className="mt-4 text-white/55 max-w-xl mx-auto">
+            Paste any Shopify store URL. We&apos;ll enumerate the first 5 products via the public storefront feed and submit each to the same Gemini + Shotstack pipeline. Works without OAuth or install.
+          </p>
+        </div>
+
+        <div className="mt-10 max-w-3xl mx-auto">
+          <div className="rounded-2xl border border-line bg-card overflow-hidden">
+            <div className="px-4 h-10 border-b border-line bg-[#0A0B10] flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2A2D38]"/>
+              <span className="ml-2 font-mono text-[11px] text-white/40">productreel · /backfill</span>
+              <span className="ml-auto font-mono text-[10.5px] text-white/40">POST /api/backfill</span>
+            </div>
+
+            <div className="p-5 sm:p-6">
+              {step !== 'rendering' && (
+                <>
+                  <label className="block font-mono text-[11px] uppercase tracking-widest text-white/40 mb-2">Shopify store URL</label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input type="url" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://your-store.com"
+                           className="flex-1 bg-[#0E0F14] border border-line focus:border-brand/60 focus-ring text-sm text-white placeholder:text-white/30 px-4 py-3 rounded-lg transition-colors"/>
+                    <button onClick={start} disabled={step === 'submitting'}
+                            className="bg-brand hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-3 rounded-lg shadow-glow-sm hover:shadow-glow ring-1 ring-brand/40 transition-all whitespace-nowrap inline-flex items-center justify-center gap-2">
+                      {step === 'submitting' ? <><span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin"/> Enumerating...</> : <><ILayers size={14}/> Backfill 5 products</>}
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    <span className="text-[11px] font-mono text-white/35 mr-1">try:</span>
+                    {SAMPLE_STORES.map((s) => (
+                      <button key={s} onClick={() => setStoreUrl(s)}
+                              className="text-[11px] font-mono text-white/55 hover:text-white px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors">
+                        {s.replace(/^https?:\/\//, '')}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-4 rounded-lg bg-amber/8 border border-amber/30 text-amber/90 text-[12.5px] px-3.5 py-2.5 leading-relaxed">
+                    <strong className="font-semibold">Heads up:</strong> this only works if your store exposes the public <code className="font-mono text-amber bg-amber/10 px-1 rounded">/products.json</code> feed (most Shopify stores do by default). Stores behind anti-bot or with the storefront API disabled will need the Admin API + OAuth route, which is in the next sprint.
+                  </div>
+                  {error && <div className="mt-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-[13px] px-3.5 py-2.5">{error}</div>}
+                </>
+              )}
+
+              {step === 'rendering' && meta && (
+                <>
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                      <div className="text-[13px] text-white/65">Backfilling <span className="text-white font-medium">{meta.store.replace(/^https?:\/\//, '')}</span></div>
+                      <div className="mt-0.5 font-mono text-[11px] text-white/40">{products.length} submitted · {meta.failed} skipped · {meta.total} total in catalog</div>
+                    </div>
+                    <button onClick={reset} className="text-[12px] font-mono text-white/50 hover:text-white inline-flex items-center gap-1.5">
+                      <IRefresh size={13}/> Try another store
+                    </button>
+                  </div>
+
+                  <ul className="mt-5 space-y-2">
+                    {products.map((p) => {
+                      const st = statuses[p.renderId] ?? 'queued';
+                      const badge = STATE_BADGE[st];
+                      const vurl = videoUrls[p.renderId];
+                      return (
+                        <li key={p.renderId} className="rounded-lg border border-line bg-[#0a0b10] px-3.5 py-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[13.5px] text-white truncate">{p.title}</div>
+                            <div className="font-mono text-[10.5px] text-white/35 truncate">{p.renderId.slice(0, 8)} · /{p.handle}</div>
+                          </div>
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border font-mono text-[10px] uppercase tracking-[0.15em] ${badge.cls}`}>
+                            {st !== 'done' && st !== 'failed' && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"/>}
+                            {badge.label}
+                          </span>
+                          {vurl ? (
+                            <a href={vurl} target="_blank" rel="noopener noreferrer"
+                               className="inline-flex items-center gap-1.5 text-[12px] font-medium text-brand-soft hover:text-white px-3 py-1.5 rounded-md bg-brand/10 hover:bg-brand/20 border border-brand/30 transition-colors whitespace-nowrap">
+                              <IDownload size={13}/> Download
+                            </a>
+                          ) : (
+                            <span className="w-[100px] text-right font-mono text-[10.5px] text-white/30 whitespace-nowrap">—</span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  {meta.errors.length > 0 && (
+                    <details className="mt-4 rounded-lg border border-red-500/25 bg-red-500/5 text-[12.5px] text-red-300/90 px-3.5 py-2.5">
+                      <summary className="cursor-pointer font-mono text-[11px] uppercase tracking-widest">{meta.errors.length} product(s) skipped — show why</summary>
+                      <ul className="mt-2 space-y-1 font-mono text-[11.5px] text-red-300/80">
+                        {meta.errors.map((er, i) => <li key={i}>• {er.reason}</li>)}
+                      </ul>
+                    </details>
+                  )}
+
+                  {allDone && (
+                    <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-ok/40 bg-ok/10 text-ok px-3.5 py-2 text-[13px]">
+                      <ICheck size={14}/> All {products.length} renders finished
+                    </div>
+                  )}
+                </>
+              )}
+
+              {step === 'error' && (
+                <>
+                  <div className="rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-[13px] px-3.5 py-3 leading-relaxed">{error}</div>
+                  <button onClick={reset} className="mt-4 text-[12px] font-mono text-white/55 hover:text-white inline-flex items-center gap-1.5">
+                    <IRefresh size={13}/> Try a different store
+                  </button>
+                </>
+              )}
+            </div>
           </div>
+          <div className="mt-4 text-center text-[11.5px] font-mono text-white/35">free during pilot · no credit card · built on Shotstack</div>
         </div>
       </div>
     </section>
@@ -1297,14 +1485,14 @@ const ConnectShopifySection = () => {
             <div className="inline-flex items-center gap-2">
               <SectionEyebrow icon={<ICloud size={12}/>}>Real Shopify automation</SectionEyebrow>
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber/15 border border-amber/40 text-amber font-mono text-[10px] uppercase tracking-[0.18em]">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse"/>pilot
+                <span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse"/>coming soon
               </span>
             </div>
             <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white max-w-3xl">
               Install once. <span className="text-gradient">Every new product auto-renders</span>.
             </h2>
             <p className="mt-4 text-white/55 max-w-xl">
-              Every product you save in Shopify fires Gemini + Shotstack automatically and lands a finished video in your inbox. The one-click install you see here is the next sprint — we&apos;re onboarding pilot stores manually right now.
+              One-click OAuth install ships in the next sprint. The webhook + Gemini + Shotstack pipeline behind it already runs in production — pilot merchants are onboarded manually for now. Have an existing catalog and don&apos;t want to wait? Jump to the <a href="#backfill" className="underline decoration-brand/50 hover:decoration-brand text-white/80">backfill</a> below to render your whole store right now.
             </p>
           </div>
         </div>
@@ -1507,7 +1695,7 @@ export default function Home() {
         <ConnectShopifySection/>
         <ChatSection/>
         <SetupSection/>
-        <Waitlist/>
+        <BackfillSection/>
       </main>
       <Footer/>
     </div>
