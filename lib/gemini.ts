@@ -28,6 +28,11 @@ export interface GeminiAnalysis {
   // the Cinematic Showcase MODEL slot (1133×120 at 60px) and wrap onto the YEAR/MAKE row.
   // Gemini compresses to a punchy ad headline ("CANVAS CRUISER", "TREE RUNNERS").
   short_title?: string;
+  // Hex color for overlay text in the Cinematic Showcase template. Gemini picks white
+  // for dark/colorful backgrounds and near-black for light backgrounds (silver jewelry,
+  // white sneakers, light food shots). Limited to a binary palette so brand consistency
+  // holds — the template wasn't designed for arbitrary text colors.
+  text_color?: '#ffffff' | '#111111';
   // Optional legacy fields. shotstack.ts still reads these via `analysis.spec || …`
   // fallbacks; keeping them optional avoids breaking that path when Gemini omits them.
   mood?: string;
@@ -72,6 +77,10 @@ Write:
   • "Apple iPhone 16 Pro Max 256GB Titanium" → "IPHONE 16 PRO"
   • "Glossier Cloud Paint in Dusk" → "CLOUD PAINT"
   This text is rendered as a single line in a fixed-width slot — if it's >22 chars it WILL overflow and break the layout. Count characters before writing.
+- text_color: The overlay-text color for this product. Choose based on the AVERAGE LUMINANCE of the product photo:
+  • "#ffffff" (white) — when the photo is mostly dark, mid-tone, or has saturated colors (black background, denim, brown leather, red car, navy hoodie, dark food shots).
+  • "#111111" (near-black) — when the photo is mostly LIGHT (silver/chrome jewelry on white, white sneakers on white seamless, beige beauty product on cream, light food on marble, off-white linen).
+  Default to "#ffffff" if uncertain. This decision is critical: white text on a silver bracelet against a white background is invisible.
 
 ---
 
@@ -82,8 +91,9 @@ Check your own output against these criteria:
 [ ] Is text_position safe given where the product is? If not, change it.
 [ ] If the product fills most of the frame, is needs_text_background set to true? Fix if not.
 [ ] Is short_title ≤22 chars and 2-4 words? Count characters. If over, shorten further.
+[ ] Would a person reading text_color on top of this image be able to read it? If a white-on-white or black-on-black collision would happen, flip the color.
 
-Only produce output after passing all 5 checks.
+Only produce output after passing all 6 checks.
 
 ---
 
@@ -96,7 +106,8 @@ Return ONLY a raw JSON object. No markdown, no explanation, no backticks. Start 
   "text_position": "top" | "bottom" | "split",
   "needs_text_background": true | false,
   "product_category": "fashion | footwear | electronics | beauty | food | home | sports | jewelry | other",
-  "short_title": "string — 2-4 words, MAX 22 chars, all caps style headline"
+  "short_title": "string — 2-4 words, MAX 22 chars, all caps style headline",
+  "text_color": "#ffffff" | "#111111"
 }`;
 
 const VALID_POSITIONS: TextPosition[] = ['top', 'bottom', 'split'];
@@ -133,6 +144,7 @@ function fallbackAnalysis(product: ProductInput): GeminiAnalysis {
     needs_text_background: true,
     product_category: 'other',
     short_title: deriveShortTitle(product.title),
+    text_color: '#ffffff',
   };
 }
 
@@ -177,7 +189,19 @@ function coerceAnalysis(raw: unknown, product: ProductInput): GeminiAnalysis {
   const rawShort = typeof r.short_title === 'string' ? r.short_title.trim() : '';
   const short_title = (rawShort ? rawShort : fb.short_title || deriveShortTitle(product.title)).slice(0, 22);
 
-  return { voiceover, background_prompt, text_position, needs_text_background, product_category, short_title };
+  // Binary palette only. Anything else (Gemini hallucinating a hex value, or returning
+  // a CSS name) falls back to white — matches the legacy template behavior.
+  const text_color: '#ffffff' | '#111111' = r.text_color === '#111111' ? '#111111' : '#ffffff';
+
+  return {
+    voiceover,
+    background_prompt,
+    text_position,
+    needs_text_background,
+    product_category,
+    short_title,
+    text_color,
+  };
 }
 
 export interface TextOverlayAdjustments {

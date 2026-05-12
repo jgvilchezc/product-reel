@@ -67,6 +67,13 @@ export function buildRenderPayload(
   // titles to a 2-4 word ad headline; the hard slice is a final safety net.
   const model = (analysis.short_title || product.title).toUpperCase().slice(0, 22);
   const seller = (brandName || 'OFFICIAL STORE').toUpperCase().slice(0, 18);
+  // Overlay text color picked by Gemini based on average background luminance.
+  // White on white (silver bracelet on seamless white, off-white sneakers, light food)
+  // is unreadable; Gemini flips to near-black for those. Falls back to white when the
+  // analyzer omits the field. Applied to every text clip below — the cinematic template
+  // was designed assuming a single overlay color so flipping all clips together keeps
+  // the visual identity consistent.
+  const textColor: string = analysis.text_color || '#ffffff';
   const type = 'NEW';
   const state = 'ONLINE';
   const postcode = 'WORLDWIDE';
@@ -106,7 +113,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: '{{ YEAR }}',
-                font: { family: 'Montserrat ExtraBold', color: '#ffffff', size: 160 },
+                font: { family: 'Montserrat ExtraBold', color: textColor, size: 160 },
                 alignment: { horizontal: 'right' },
                 width: 450,
                 height: 180,
@@ -127,7 +134,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: '{{ MAKE }}',
-                font: { family: 'Montserrat ExtraBold', color: '#ffffff', size: 80 },
+                font: { family: 'Montserrat ExtraBold', color: textColor, size: 80 },
                 alignment: { horizontal: 'left' },
                 width: 1131,
                 height: 160,
@@ -148,7 +155,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: '{{ MODEL }}',
-                font: { family: 'Montserrat SemiBold', color: '#ffffff', size: 60 },
+                font: { family: 'Montserrat SemiBold', color: textColor, size: 60 },
                 alignment: { horizontal: 'left' },
                 width: 1133,
                 height: 120,
@@ -169,7 +176,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: '{{ SELLER }} | {{ TYPE }} | {{ STATE }}, {{ POSTCODE }}',
-                font: { family: 'Montserrat SemiBold', color: '#ffffff', size: 32 },
+                font: { family: 'Montserrat SemiBold', color: textColor, size: 32 },
                 alignment: { horizontal: 'left' },
                 width: 826,
                 height: 60,
@@ -212,7 +219,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: 'PRICE',
-                font: { family: 'Montserrat SemiBold', color: '#ffffff', size: 40 },
+                font: { family: 'Montserrat SemiBold', color: textColor, size: 40 },
                 alignment: { horizontal: 'left' },
                 width: 144,
                 height: 93,
@@ -233,7 +240,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: '{{ SPEC }}',
-                font: { family: 'Montserrat SemiBold', color: '#ffffff', size: 40 },
+                font: { family: 'Montserrat SemiBold', color: textColor, size: 40 },
                 alignment: { horizontal: 'right' },
                 width: 700,
                 height: 90,
@@ -254,7 +261,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: '{{ ODOMETER }}',
-                font: { family: 'Montserrat ExtraBold', color: '#ffffff', size: 90 },
+                font: { family: 'Montserrat ExtraBold', color: textColor, size: 90 },
                 alignment: { horizontal: 'right' },
                 width: 423,
                 height: 160,
@@ -354,7 +361,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: 'FEATURES',
-                font: { family: 'Montserrat ExtraBold', color: '#ffffff', size: 60 },
+                font: { family: 'Montserrat ExtraBold', color: textColor, size: 60 },
                 alignment: { horizontal: 'left' },
                 width: 620,
                 height: 96,
@@ -375,7 +382,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: '{{ INTERIOR }}',
-                font: { family: 'Montserrat SemiBold', color: '#ffffff', size: 36 },
+                font: { family: 'Montserrat SemiBold', color: textColor, size: 36 },
                 alignment: { horizontal: 'left', vertical: 'top' },
                 width: 1000,
                 height: 250,
@@ -458,7 +465,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: 'UPGRADES',
-                font: { family: 'Montserrat ExtraBold', color: '#ffffff', size: 60 },
+                font: { family: 'Montserrat ExtraBold', color: textColor, size: 60 },
                 alignment: { horizontal: 'left' },
                 width: 620,
                 height: 108,
@@ -479,7 +486,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: '{{ UPGRADES }}',
-                font: { family: 'Montserrat SemiBold', color: '#ffffff', size: 36 },
+                font: { family: 'Montserrat SemiBold', color: textColor, size: 36 },
                 alignment: { horizontal: 'left', vertical: 'top' },
                 width: 903,
                 height: 300,
@@ -540,7 +547,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: '{{ PRICE }}',
-                font: { family: 'Montserrat ExtraBold', color: '#ffffff', size: 150 },
+                font: { family: 'Montserrat ExtraBold', color: textColor, size: 150 },
                 alignment: { horizontal: 'center' },
                 width: 1133,
                 height: 180,
@@ -560,7 +567,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: 'free shipping worldwide',
-                font: { family: 'Montserrat SemiBold', color: '#ffffff', size: 36 },
+                font: { family: 'Montserrat SemiBold', color: textColor, size: 36 },
                 alignment: { horizontal: 'center' },
                 width: 620,
                 height: 93,
@@ -581,7 +588,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: 'shop now',
-                font: { family: 'Montserrat ExtraBold', color: '#ffffff', size: 80 },
+                font: { family: 'Montserrat ExtraBold', color: textColor, size: 80 },
                 alignment: { horizontal: 'center' },
                 width: 1920,
                 height: 200,
@@ -601,7 +608,7 @@ export function buildRenderPayload(
               asset: {
                 type: 'text',
                 text: '{{ STORE }}',
-                font: { family: 'Montserrat SemiBold', color: '#ffffff', size: 40 },
+                font: { family: 'Montserrat SemiBold', color: textColor, size: 40 },
                 alignment: { horizontal: 'center' },
                 width: 1920,
                 height: 1080,
