@@ -56,6 +56,9 @@ export function shopifyToProductInput(product: ShopifyProduct): {
   const price = parseFloat(rawPrice).toFixed(0);
 
   // Cinematic Showcase uses up to 7 images; Bold Energy & Clean Minimal cap at 5 internally.
+  // Returns the UNIQUE images only — no longer pads with duplicates. Padding is done
+  // downstream in processProduct after Gemini reorders by ad-priority, so the cycling
+  // happens with the best ordering rather than the raw Shopify order.
   const imageUrls = (product.images || [])
     .map((i) => i.src)
     .filter((s): s is string => typeof s === 'string' && s.length > 0)
@@ -64,14 +67,35 @@ export function shopifyToProductInput(product: ShopifyProduct): {
   if (imageUrls.length === 0) {
     throw new Error('No product images found');
   }
-  while (imageUrls.length < 7) {
-    imageUrls.push(imageUrls[imageUrls.length - 1]);
-  }
 
   return {
     productInput: { title: product.title, body_html: description, price, images: imageUrls },
     brandName: product.vendor || 'Your Store',
   };
+}
+
+// Reorder images per Gemini's ad-priority ranking. Returns natural order when the
+// priority array is missing or length-mismatched (e.g. /api/simulate's geminiImageOverride
+// path, where Gemini sees fewer images than the renderer uses).
+function reorderByPriority(images: string[], priority: number[] | undefined): string[] {
+  if (!priority || priority.length !== images.length) return images;
+  const reordered = priority.map((i) => images[i]).filter((url): url is string => !!url);
+  return reordered.length === images.length ? reordered : images;
+}
+
+// Fill `images` up to 7 slots by cycling through the unique inputs. With 4 inputs
+// [a, b, c, d] we get [a, b, c, d, a, b, c] instead of the legacy [a, b, c, d, d, d, d]
+// which made 3 consecutive Scene 4-7 frames identical (the user-flagged "sole repeats
+// from second 12 onward" bug).
+function cyclicPadToSeven(images: string[]): string[] {
+  if (images.length === 0) throw new Error('cyclicPadToSeven: empty image list');
+  const out = [...images];
+  let i = 0;
+  while (out.length < 7) {
+    out.push(images[i % images.length]);
+    i++;
+  }
+  return out;
 }
 
 export async function processProduct(
@@ -86,18 +110,21 @@ export async function processProduct(
 
   const analysis = await analyzeProduct(geminiInput, options.geminiKey);
 
-  // Optional image-quality pass. Gated by flag so the default Shopify webhook path
-  // (tight 60s maxDuration) keeps its current timing. /api/scrape exposes this for
-  // the Phase 1 outreach pre-renders where latency doesn't matter.
-  let renderInput = productInput;
+  // 1. Reorder by ad-priority. Gemini picks the strongest hero shot for slot 0 and
+  //    pushes detail/closeup shots toward the end.
+  let unique = reorderByPriority(productInput.images, analysis.image_priority);
+
+  // 2. Optional Nano Banana enhancement. Run on UNIQUE images only (not the padded 7)
+  //    so we don't pay 2-3x the cost enhancing duplicates of the same source.
   if (options.enhanceImagesOption) {
-    const enhanced = await enhanceImages(
-      productInput.images,
-      analysis.product_category,
-      options.geminiKey
-    );
-    renderInput = { ...productInput, images: enhanced };
+    unique = await enhanceImages(unique, analysis.product_category, options.geminiKey);
   }
+
+  // 3. Cycle-pad to 7 slots. Repeats happen at the END of the video (Scenes 6-7) and
+  //    cycle from the top, so the visible repetition is the HERO shot — never a sole
+  //    closeup three times in a row.
+  const finalImages = cyclicPadToSeven(unique);
+  const renderInput: ProductInput = { ...productInput, images: finalImages };
 
   const renderId = await submitRender(
     buildRenderPayload(renderInput, analysis, undefined, brandName)

@@ -41,6 +41,14 @@ export interface GeminiAnalysis {
   spec?: string;       // 2-4 word tagline, ≤22 chars
   interior?: string;   // one short feature sentence, ≤90 chars
   upgrades?: string;   // one short benefit sentence, ≤90 chars
+  // Ad-video priority ordering for the input images. Array of 0-based indices into
+  // the input image array, ordered best-to-worst as a hero shot. Length matches the
+  // number of images Gemini saw (which may be fewer than productInput.images.length
+  // when /api/simulate uses geminiImageOverride). Pipeline.ts uses this to reorder
+  // before submitting to Shotstack so the strongest shot opens the video — and so
+  // the worst shot (e.g. an extreme closeup of a sole) doesn't become the hero by
+  // accident of source ordering on the Shopify product page.
+  image_priority?: number[];
 }
 
 const SYSTEM_PROMPT = `You are a professional video advertising director with deep expertise in visual composition and product photography.
@@ -95,6 +103,18 @@ Write:
 - upgrades: One short sentence on the standout BENEFIT or what makes it special. MAXIMUM 90 CHARACTERS. Renders as body copy in Scene 4 under an "UPGRADES" header. Examples:
   • "Machine washable. Made from sustainable materials. Travel-ready."
   • "Hypoallergenic and water-resistant. Designed for everyday wear."
+- image_priority: An array of 0-based indices ordering the input images by how strong they would be in an ad video. The FIRST index in the array becomes the opening hero shot of the video; the last becomes the closing scene. Rules:
+  • The array length MUST equal the number of input images.
+  • All values must be unique and in range [0, N-1].
+  • Strong hero shots (image[0] of the array): full-product angled hero, 3/4 view, side profile, worn/styled shot. Anything where the silhouette is recognizable in 1 second.
+  • Weak shots (last in the array): extreme close-ups of soles/clasps, top-down detail shots, packaging-only flat lays, lifestyle shots where the product is barely visible.
+  • Category-specific bias:
+    - footwear/fashion: angled hero (3/4 view) > side profile > closeups > sole/top-down detail
+    - jewelry: worn shot or hero clasp > full piece > flat lay > macro detail
+    - electronics: front-facing hero > 3/4 angle > back/profile > port detail
+    - beauty: product hero with branding visible > swatch/texture > packaging detail
+    - food: most appetizing "wow" shot > styled scene > ingredient closeup
+  Example with 4 footwear images (image 0 = sole closeup, image 1 = side profile, image 2 = 3/4 hero, image 3 = laces detail): image_priority = [2, 1, 3, 0]
 
 ---
 
@@ -107,8 +127,9 @@ Check your own output against these criteria:
 [ ] Is short_title ≤22 chars and 2-4 words? Count characters. If over, shorten further.
 [ ] Would a person reading text_color on top of this image be able to read it? If a white-on-white or black-on-black collision would happen, flip the color.
 [ ] Is spec ≤22 chars? Is interior ≤90 chars? Is upgrades ≤90 chars? Count and trim if any are over.
+[ ] Does image_priority have length equal to the number of input images? Are all values unique and within [0, N-1]? Does the first index point to a strong hero shot (NOT a top-down or extreme closeup)?
 
-Only produce output after passing all 7 checks.
+Only produce output after passing all 8 checks.
 
 ---
 
@@ -125,7 +146,8 @@ Return ONLY a raw JSON object. No markdown, no explanation, no backticks. Start 
   "text_color": "#ffffff" | "#111111",
   "spec": "string — 2-4 words, MAX 22 chars, tagline",
   "interior": "string — one sentence, MAX 90 chars, feature description",
-  "upgrades": "string — one sentence, MAX 90 chars, benefit description"
+  "upgrades": "string — one sentence, MAX 90 chars, benefit description",
+  "image_priority": [number, number, ...]
 }`;
 
 const VALID_POSITIONS: TextPosition[] = ['top', 'bottom', 'split'];
@@ -218,6 +240,19 @@ function coerceAnalysis(raw: unknown, product: ProductInput): GeminiAnalysis {
   const interior = typeof r.interior === 'string' ? r.interior.trim().slice(0, 90) : undefined;
   const upgrades = typeof r.upgrades === 'string' ? r.upgrades.trim().slice(0, 90) : undefined;
 
+  // Validate image_priority: must be an array of unique integers in [0, N-1] where N
+  // is the number of images Gemini saw. We don't know N here, but we cap it to the
+  // number of images in productInput (the most we ever send to Gemini). Pipeline.ts
+  // checks length-match against the actually-rendered images before applying.
+  const imageCount = product.images.length;
+  let image_priority: number[] | undefined;
+  if (Array.isArray(r.image_priority)) {
+    const nums = r.image_priority
+      .filter((v): v is number => Number.isInteger(v) && v >= 0 && v < imageCount);
+    const unique = Array.from(new Set(nums));
+    if (unique.length > 0) image_priority = unique;
+  }
+
   return {
     voiceover,
     background_prompt,
@@ -229,6 +264,7 @@ function coerceAnalysis(raw: unknown, product: ProductInput): GeminiAnalysis {
     spec,
     interior,
     upgrades,
+    image_priority,
   };
 }
 
@@ -259,15 +295,29 @@ export function getTextOverlayAdjustments(analysis: GeminiAnalysis): TextOverlay
 }
 
 export async function analyzeProduct(product: ProductInput, geminiKey: string): Promise<GeminiAnalysis> {
-  let imageParts: Array<{ inline_data: { data: string; mime_type: string } }> = [];
-  try {
-    imageParts = [await imageUrlToInlineData(shrinkUrl(product.images[0]))];
-  } catch {
+  // Send ALL images (up to 7 — the Cinematic Showcase ceiling) so Gemini can return
+  // image_priority. Failed fetches are dropped silently; if every image fails we fall
+  // back. Previously this function only sent images[0], which meant Gemini had no way
+  // to rank shots and the pipeline used Shopify's source order — frequently leading
+  // to "sole closeup as hero" since Shopify product pages sometimes upload detail
+  // shots first.
+  const imageResults = await Promise.allSettled(
+    product.images.slice(0, 7).map((url) => imageUrlToInlineData(shrinkUrl(url)))
+  );
+  const imageParts = imageResults
+    .filter(
+      (r): r is PromiseFulfilledResult<{ inline_data: { data: string; mime_type: string } }> =>
+        r.status === 'fulfilled',
+    )
+    .map((r) => r.value);
+  if (imageParts.length === 0) {
     return fallbackAnalysis(product);
   }
 
   const description = (product.body_html || '').replace(/<[^>]+>/g, '').trim();
-  const userText = `Product name: ${product.title}. Price: $${product.price}. Description: ${description}. Analyze this product image and follow all 5 steps.`;
+  const imageCount = imageParts.length;
+  const imageLabel = imageCount === 1 ? 'this product image' : `these ${imageCount} product images (indexed 0..${imageCount - 1} in the order shown)`;
+  const userText = `Product name: ${product.title}. Price: $${product.price}. Description: ${description}. Analyze ${imageLabel} and follow all 5 steps. For image_priority, return an array of length ${imageCount}.`;
 
   const body = {
     system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
