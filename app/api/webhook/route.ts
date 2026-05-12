@@ -83,12 +83,16 @@ export async function POST(req: NextRequest) {
   // pollAndEmail as a nested void promise lets it die when processProduct resolves.
   after(async () => {
     try {
-      // TODO(image-enhance): once Nano Banana latency is measured in production via
-      // the /api/scrape outreach script, flip `enhanceImagesOption: true` here too.
-      // Currently off because we're already against the 60s maxDuration ceiling.
+      // Nano Banana enhancement enabled — now that source images are capped at 5
+      // (pipeline.ts shopifyToProductInput), the 5-parallel Nano Banana call adds
+      // ~8-12s and we still fit inside Vercel's 60s budget with ~5-10s of margin.
+      // Quality improvement on low-res Shopify CDN sources is significant.
+      // If we ever start seeing email timeouts again, the first thing to revert
+      // is this flag — pipeline gracefully falls back to original URLs per image.
       const { renderIds, pollAndEmailPromise } = await processProduct(product, {
         geminiKey,
         notifyEmail,
+        enhanceImagesOption: true,
       });
       console.log(`[webhook] product ${product.id} renders submitted:`, renderIds);
       if (pollAndEmailPromise) {

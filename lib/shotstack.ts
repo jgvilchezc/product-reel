@@ -74,6 +74,18 @@ export function buildRenderPayload(
   // was designed assuming a single overlay color so flipping all clips together keeps
   // the visual identity consistent.
   const textColor: string = analysis.text_color || '#ffffff';
+
+  // Background-image opacity ties to text color. The original car-sale template had
+  // opacity:0.4 hardcoded on Scenes 1-2 (intro + spec) but NOT on Scenes 3-4
+  // (FEATURES/UPGRADES). On dark products this looked fine, but on light products
+  // (silver bracelet on seamless white) the un-darkened Scenes 3-4 left white text
+  // floating invisibly on a near-white background. (User-flagged May 12.)
+  //
+  // Now we tie opacity to the text color decision:
+  //   white text → darken all image backgrounds to 0.4 so white reads everywhere
+  //   dark text  → keep images bright at 1.0 so #111111 contrasts cleanly
+  // This restores per-scene legibility regardless of product luminance.
+  const imageOpacity = textColor === '#111111' ? 1 : 0.4;
   const type = 'NEW';
   const state = 'ONLINE';
   const postcode = 'WORLDWIDE';
@@ -209,7 +221,7 @@ export function buildRenderPayload(
               transition: { in: 'fade' },
               position: 'center',
               fit: 'crop',
-              opacity: 0.4,
+              opacity: imageOpacity,
             },
             {
               asset: {
@@ -334,7 +346,7 @@ export function buildRenderPayload(
               position: 'center',
               transition: { in: 'fade' },
               scale: 1,
-              opacity: 0.4,
+              opacity: imageOpacity,
               start: 4,
               length: 6,
             },
@@ -356,6 +368,7 @@ export function buildRenderPayload(
               position: 'center',
               fit: 'crop',
               scale: 1,
+              opacity: imageOpacity,
               transition: { in: 'fade' },
               start: 9,
               length: 3,
@@ -444,6 +457,7 @@ export function buildRenderPayload(
               transition: { in: 'fade' },
               fit: 'crop',
               scale: 1,
+              opacity: imageOpacity,
             },
             {
               asset: {
@@ -463,6 +477,7 @@ export function buildRenderPayload(
               effect: 'zoomIn',
               position: 'center',
               start: 17,
+              opacity: imageOpacity,
             },
             {
               asset: {
@@ -545,6 +560,7 @@ export function buildRenderPayload(
               length: 6,
               effect: 'zoomIn',
               position: 'center',
+              opacity: imageOpacity,
             },
             {
               asset: {
@@ -649,7 +665,7 @@ export function buildRenderPayload(
               position: 'center',
               fit: 'crop',
               scale: 1,
-              opacity: 0.4,
+              opacity: imageOpacity,
             },
           ],
         },
