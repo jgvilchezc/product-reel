@@ -57,15 +57,32 @@ export async function POST(req: NextRequest) {
   // pollAndEmail task always runs in production.)
   const notifyEmail = process.env.MERCHANT_EMAIL || 'josegabrielvilchezc@gmail.com';
 
-  // Test mode: await the submit phase so the dev UI can see renderIds & poll status.
-  // Email task is still fire-and-forget inside processProduct() when notifyEmail is set.
+  // Test mode: same pipeline as production but synchronous so the dev tester sees
+  // renderIds immediately. Mirrors the production flow's Nano Banana + callback wiring
+  // so what gets tested here is what ships.
   if (testMode) {
     try {
-      const { renderIds, productInput, brandName } = await processProduct(product, {
+      const originHeader = req.headers.get('x-forwarded-host');
+      const origin = originHeader ? `https://${originHeader}` : req.nextUrl.origin;
+      const productTitle = product.title?.slice(0, 80) || 'your product';
+      const brandName = product.vendor?.slice(0, 40) || 'your store';
+      const callbackUrl = notifyEmail
+        ? `${origin}/api/shotstack-callback?email=${encodeURIComponent(notifyEmail)}&product=${encodeURIComponent(productTitle)}&brand=${encodeURIComponent(brandName)}`
+        : undefined;
+      const result = await processProduct(product, {
         geminiKey,
         notifyEmail,
+        enhanceImagesOption: true,
+        callbackUrl,
       });
-      return NextResponse.json({ ok: true, renderIds, productInput, brandName, emailQueued: !!notifyEmail });
+      return NextResponse.json({
+        ok: true,
+        renderIds: result.renderIds,
+        productInput: result.productInput,
+        brandName: result.brandName,
+        emailQueued: !!notifyEmail,
+        callbackUrl,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return NextResponse.json({ error: message }, { status: 500 });
