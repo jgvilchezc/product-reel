@@ -174,8 +174,8 @@ const Hero = () => (
         <span className="block text-gradient">gets a video. Automatically.</span>
       </h1>
       <p className="mt-7 mx-auto max-w-2xl text-center text-[15px] sm:text-[17px] text-white/55 leading-relaxed">
-        Connect your Shopify store once. The next time you add a product, ProductReel
-        ships a 20-second cinematic ad — no editor, no template hunting, no effort.
+        Connect your Shopify store once. The next time you add a product, we ship a 36-second
+        cinematic ad to your inbox. You go back to running your store.
       </p>
       <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
         <a href="#demo" className="group inline-flex items-center gap-2 bg-brand hover:bg-brand-hover text-white text-[14.5px] font-medium px-5 py-3 rounded-lg shadow-glow ring-1 ring-brand/40 transition-all">
@@ -219,11 +219,11 @@ const StepCard = ({ step: { n, I, title, body } }: { step: StepData }) => (
 const HowItWorks = () => {
   const steps: StepData[] = [
     { n: '01', I: IUpload, title: 'Upload your product',
-      body: 'Add a product to your Shopify store like you always do. The webhook fires the moment the listing goes live.' },
-    { n: '02', I: IWand,   title: 'AI picks templates & generates',
-      body: 'Gemini Vision reads your photos, writes a voiceover script, and Shotstack renders three cinematic 20-second cuts in parallel.' },
-    { n: '03', I: ILayers, title: 'Choose your favorite or customize',
-      body: 'Pick the cut that fits your brand, download the MP4, or describe a new vision in plain language and let the AI Director re-cut it.' },
+      body: 'Add a product to your Shopify store like you always do. The webhook fires the moment you hit save.' },
+    { n: '02', I: IWand,   title: 'Gemini reads, Shotstack renders',
+      body: 'Gemini analyzes the photos and writes the on-screen copy. Shotstack renders a 36-second cut at 1080p while you go make coffee.' },
+    { n: '03', I: ILayers, title: 'Email lands. Done.',
+      body: 'The finished MP4 shows up in your inbox in under a minute. Post it, embed it on the PDP, or describe what to change and let the Director re-cut it.' },
   ];
   return (
     <section id="how-it-works" className="border-t border-line">
@@ -376,13 +376,11 @@ const DemoRendering = ({ progress, elapsed, onCancel }: { progress: number[]; el
           <span className="font-mono text-[11px] text-white/45">render.log</span>
         </div>
         <div className="p-4 font-mono text-[11.5px] leading-6 text-white/55 max-h-44 overflow-hidden">
-          <Logline status="ok"  t="00:00.4">connected · sample product loaded</Logline>
-          <Logline status="ok"  t="00:01.1">gemini · vision · 3 frames analyzed</Logline>
-          <Logline status="ok"  t="00:02.8">script · voiceover drafted (167 words)</Logline>
-          <Logline status="run" t="00:03.0">shotstack · render · bold-dynamic — queued</Logline>
-          <Logline status="run" t="00:03.0">shotstack · render · clean-minimal — queued</Logline>
-          <Logline status="run" t="00:03.0">shotstack · render · story-mode — queued</Logline>
-          <Logline status="run" t="00:04.6">tts · elevenlabs · synthesis · 3 voices</Logline>
+          <Logline status="ok"  t="00:00.4">sample product loaded · 5 photos</Logline>
+          <Logline status="ok"  t="00:02.1">gemini-2.5-flash · image + product data analyzed</Logline>
+          <Logline status="ok"  t="00:02.9">spec, features, upgrades drafted</Logline>
+          <Logline status="run" t="00:03.0">shotstack · cinematic-showcase · queued</Logline>
+          <Logline status="run" t="00:04.6">shotstack · render · 1080p</Logline>
         </div>
       </div>
     </div>
@@ -502,9 +500,9 @@ const DemoPicker = ({ activeReel, setActiveReel, onAgain, videoUrls, renderError
     <div className="flex items-end justify-between gap-4 flex-wrap">
       <div>
         <div className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-[0.2em] text-ok/90">
-          <ICheck size={12}/> Render complete · 3 cuts ready
+          <ICheck size={12}/> Render complete
         </div>
-        <h3 className="mt-2 font-display text-2xl sm:text-3xl font-semibold text-white tracking-tight">Pick your favorite, or describe your own.</h3>
+        <h3 className="mt-2 font-display text-2xl sm:text-3xl font-semibold text-white tracking-tight">Your video is ready.</h3>
       </div>
       <div className="flex items-center gap-2">
         <button onClick={onAgain} className="inline-flex items-center gap-1.5 text-[12.5px] text-white/65 hover:text-white px-3 py-2 rounded-md border border-line hover:border-line2">
@@ -525,8 +523,8 @@ const DemoPicker = ({ activeReel, setActiveReel, onAgain, videoUrls, renderError
     </div>
     <div className="mt-6 grid sm:grid-cols-3 gap-3 text-[12.5px]">
       <MetaPill k="Source"   v="1 product · 5 photos"/>
-      <MetaPill k="Pipeline" v="Gemini → Shotstack → MP4"/>
-      <MetaPill k="Output"   v="1080p · 20s · MP4"/>
+      <MetaPill k="Pipeline" v="Gemini → Shotstack → email"/>
+      <MetaPill k="Output"   v="1080p · 36s · MP4"/>
     </div>
   </div>
 );
@@ -625,7 +623,7 @@ const DemoSection = () => {
             <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white max-w-3xl">
               Watch one product become <span className="text-gradient">a cinematic ad</span>.
             </h2>
-            <p className="mt-4 text-white/55 max-w-xl">We&apos;ll simulate a real Shopify run end-to-end. One product, full pipeline, in real time.</p>
+            <p className="mt-4 text-white/55 max-w-xl">Real Shopify-style run. One product, the same pipeline a paying merchant gets. Watch it actually render.</p>
           </div>
           <DemoStepper step={step} onJump={handleJump}/>
         </div>
@@ -658,9 +656,9 @@ const DemoSection = () => {
 interface ChatMessage { role: 'ai'|'user'; body: string; }
 
 const INITIAL_MESSAGES: ChatMessage[] = [
-  { role: 'ai',   body: "Tell me how you want your video to look and feel. What's the vibe? Bold and energetic? Calm and premium? Funny?" },
-  { role: 'user', body: "I want something dark and cinematic with a luxury feel — slow-motion product shots, deep voiceover, almost like a fragrance ad." },
-  { role: 'ai',   body: "Got it — moody luxury, deep grain, slow camera, low-end voice, gold accents. I'll keep the product center-frame and let the silence breathe. Hit Generate when you're ready." },
+  { role: 'ai',   body: "What kind of video are you after? Describe the vibe, drop a reference, anything." },
+  { role: 'user', body: "Dark cinematic with a luxury feel. Slow product shots, deep voiceover. Almost like a fragrance ad." },
+  { role: 'ai',   body: "Got it. Moody luxury, slow camera, low voice, gold accents. Product stays center-frame. Hit Generate." },
 ];
 
 const Tag = ({ children }: { children: ReactNode }) => (
@@ -705,7 +703,7 @@ const ChatSection = () => {
     setMessages(m => [...m, { role: 'user', body: v }]);
     setInput(''); setThinking(true);
     setTimeout(() => {
-      setMessages(m => [...m, { role: 'ai', body: 'Locked in. Adjusting palette and pacing toward that direction. Ready when you are.' }]);
+      setMessages(m => [...m, { role: 'ai', body: 'Locked in. Hit Generate when you want it.' }]);
       setThinking(false);
     }, 1200);
   };
@@ -722,10 +720,10 @@ const ChatSection = () => {
               <span className="text-gradient-violet">Just describe it.</span>
             </h2>
             <p className="mt-4 text-white/60 max-w-md">
-              Tell the Director the mood, pace, and palette you have in mind. Plain language — no template jargon. We&apos;ll re-cut your video to match.
+              Tell the Director how you want it to feel. Reference moods, films, color palettes. Skip the template jargon. It re-cuts the video to match.
             </p>
             <ul className="mt-6 space-y-2 text-[13.5px] text-white/65">
-              {['Talk like you would to a creative producer.','Reference moods, films, or feelings — not effects.','One brief, one re-render. Iterate freely.'].map(x => (
+              {['Talk like you would to a creative producer.','Reference moods or films, not effects.','One brief, one re-render. Iterate until it clicks.'].map(x => (
                 <li key={x} className="flex items-start gap-2"><ICheck size={14} className="text-violet-soft mt-0.5"/> {x}</li>
               ))}
             </ul>
@@ -739,7 +737,7 @@ const ChatSection = () => {
                 <div className="leading-tight">
                   <div className="font-display text-[13.5px] font-semibold text-white">Director</div>
                   <div className="font-mono text-[10.5px] text-violet-soft/80 inline-flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-ok"/>online · gemini-2.0-flash
+                    <span className="w-1.5 h-1.5 rounded-full bg-ok"/>online · gemini-2.5-flash
                   </div>
                 </div>
                 <span className="ml-auto font-mono text-[10.5px] text-white/35">/api/director</span>
@@ -811,9 +809,9 @@ const SetupSection = () => {
     { n:'02', I:ILink,   title:'Add the Shopify webhook',
       body:'Paste the generated URL into Shopify · Settings · Notifications · Webhooks.',
       kind:'url', code:'https://yourstore.productreel.app/api/hooks/product-created' },
-    { n:'03', I:ISpark,  title:'Watch the magic',
-      body:'Add a product. Three videos arrive in your inbox before the listing finishes saving.',
-      kind:'note', code:'avg time-to-inbox · 47 seconds' },
+    { n:'03', I:ISpark,  title:'Add a product. Get the video.',
+      body:'Hit save on a new Shopify product. A 36-second cinematic ad lands in your inbox before you finish your coffee.',
+      kind:'note', code:'avg time-to-inbox · 45 seconds' },
   ];
   return (
     <section id="setup" className="border-t border-line">
@@ -865,7 +863,7 @@ const Waitlist = () => {
                 <ICheck size={15}/> You&apos;re on the list. We&apos;ll be in touch.
               </div>
             )}
-            <div className="mt-4 text-[12px] text-white/40 font-mono">no credit card · cancel anytime · 100% built on Shotstack</div>
+            <div className="mt-4 text-[12px] text-white/40 font-mono">no credit card · cancel anytime · built on Shotstack</div>
           </div>
         </div>
       </div>
@@ -917,103 +915,14 @@ const Footer = () => (
 );
 
 // ── PAGE ───────────────────────────────────────────────────────
-// ── WEBHOOK TESTER ─────────────────────────────────────────────
-type WebhookProduct = {
-  id: number;
-  title: string;
-  body_html: string;
-  vendor: string;
-  variants: Array<{ price: string }>;
-  images: Array<{ src: string }>;
-};
-
-type WebhookFormState = {
-  title: string;
-  vendor: string;
-  price: string;
-  description: string;
-  image1: string;
-  image2: string;
-  image3: string;
-};
-
+// ── Shared helpers (consumed by ScrapeSection log panel) ───────
 type WebhookLogEntry = { t: string; level: 'sys' | 'ok' | 'err'; msg: string };
-type WebhookRenderState = {
-  renderId: string;
-  status: 'queued' | 'fetching' | 'rendering' | 'saving' | 'done' | 'failed' | 'pending';
-  url?: string;
-  error?: string;
-};
-
-// Picsum delivers a stable JPG with `.jpg` in the path — Shotstack accepts these
-// directly. Real production traffic from Shopify uses cdn.shopify.com URLs which
-// always have an extension, so the same code path serves both cases.
-const SAMPLE_PRODUCT: WebhookFormState = {
-  title: 'Air Jordan 1 Retro High OG',
-  vendor: 'Test Store',
-  price: '180.00',
-  description:
-    'The iconic sneaker that changed basketball forever. Premium leather upper with classic colorblocking.',
-  image1: 'https://picsum.photos/seed/jordan1-front/1280/720.jpg',
-  image2: 'https://picsum.photos/seed/jordan1-side/1280/720.jpg',
-  image3: 'https://picsum.photos/seed/jordan1-detail/1280/720.jpg',
-};
-
-const EMPTY_FORM: WebhookFormState = {
-  title: '', vendor: '', price: '', description: '', image1: '', image2: '', image3: '',
-};
-
-const TEMPLATE_LABELS = ['Cinematic Showcase', 'Bold Energy', 'Clean Minimal'] as const;
 
 function nowStamp() {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
-
-const StatusDot = ({ state }: { state: 'idle' | 'send' | 'wait' | 'done' | 'err' }) => {
-  const cls = {
-    idle: 'bg-white/25',
-    send: 'bg-brand pulse-ring',
-    wait: 'bg-amber',
-    done: 'bg-ok',
-    err: 'bg-rose',
-  }[state];
-  return <span className={`w-2 h-2 rounded-full ${cls}`}/>;
-};
-
-const RenderStatusPill = ({ status }: { status: WebhookRenderState['status'] }) => {
-  const map: Record<WebhookRenderState['status'], { label: string; cls: string }> = {
-    pending:   { label: 'PENDING',    cls: 'text-white/40 border-white/15' },
-    queued:    { label: 'QUEUED',     cls: 'text-brand-soft border-brand/25' },
-    fetching:  { label: 'FETCHING',   cls: 'text-brand-soft border-brand/35' },
-    rendering: { label: 'RENDERING',  cls: 'text-amber border-amber/35' },
-    saving:    { label: 'SAVING',     cls: 'text-amber border-amber/35' },
-    done:      { label: 'DONE',       cls: 'text-ok border-ok/40' },
-    failed:    { label: 'FAILED',     cls: 'text-rose border-rose/40' },
-  };
-  const v = map[status];
-  return (
-    <span className={`inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] px-2 py-0.5 rounded-full border ${v.cls}`}>
-      {status !== 'pending' && <span className={`w-1.5 h-1.5 rounded-full ${
-        status === 'done' ? 'bg-ok' : status === 'failed' ? 'bg-rose' :
-        status === 'rendering' || status === 'saving' ? 'bg-amber' : 'bg-brand'
-      }`}/>}
-      {v.label}
-    </span>
-  );
-};
-
-const FieldLabel = ({ idx, children, hint }: { idx: string; children: ReactNode; hint?: string }) => (
-  <div className="flex items-center gap-2 mb-1.5">
-    <span className="font-mono text-[10px] text-white/30 tabular-nums">{idx}</span>
-    <span className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-white/55">{children}</span>
-    {hint && <span className="ml-auto font-mono text-[10px] text-white/30">{hint}</span>}
-  </div>
-);
-
-const inputCls =
-  'w-full bg-[#0a0b10] border border-line rounded-md px-3 py-2 text-[13px] text-white placeholder:text-white/25 font-sans focus-ring transition-colors hover:border-line2';
 
 
 // ── SCRAPE SECTION ─────────────────────────────────────────────
@@ -1385,12 +1294,17 @@ const ConnectShopifySection = () => {
       <div className="relative max-w-6xl mx-auto px-6 py-20 sm:py-28">
         <div className="flex items-end justify-between gap-6 flex-wrap">
           <div>
-            <SectionEyebrow icon={<ICloud size={12}/>}>Real Shopify automation</SectionEyebrow>
+            <div className="inline-flex items-center gap-2">
+              <SectionEyebrow icon={<ICloud size={12}/>}>Real Shopify automation</SectionEyebrow>
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber/15 border border-amber/40 text-amber font-mono text-[10px] uppercase tracking-[0.18em]">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse"/>pilot
+              </span>
+            </div>
             <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white max-w-3xl">
-              Connect your store in one click. <span className="text-gradient">Auto-render every product</span>.
+              Install once. <span className="text-gradient">Every new product auto-renders</span>.
             </h2>
             <p className="mt-4 text-white/55 max-w-xl">
-              Install ProductReel on your Shopify store. Every new product fires Gemini + Shotstack automatically and lands a finished video in your inbox. We never see your password.
+              Every product you save in Shopify fires Gemini + Shotstack automatically and lands a finished video in your inbox. The one-click install you see here is the next sprint — we&apos;re onboarding pilot stores manually right now.
             </p>
           </div>
         </div>
@@ -1422,19 +1336,19 @@ const ConnectShopifySection = () => {
                     <IShop size={26} className="text-ok"/>
                   </div>
                   <h3 className="font-display text-2xl font-semibold text-white tracking-tight">
-                    Install ProductReel on Shopify
+                    Preview the install flow
                   </h3>
                   <p className="mt-2 text-[13.5px] text-white/55 leading-relaxed">
-                    One click. Your store is auto-configured: webhook subscription, signing secret, and pipeline — all handled by us.
+                    Click through what the real install will feel like once we ship the public Shopify App. Pilot merchants today get onboarded manually via Slack.
                   </p>
                   <button onClick={startInstall}
                     className="mt-7 w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-ok hover:bg-ok/90 text-black text-sm font-semibold px-5 py-3 rounded-lg shadow-[0_0_30px_rgba(34,197,94,0.35)] transition-all">
-                    <IShop size={15}/> Install on Shopify <IArrow size={14}/>
+                    <IShop size={15}/> Preview install flow <IArrow size={14}/>
                   </button>
                   <div className="mt-5 flex items-center justify-center gap-x-5 gap-y-2 flex-wrap text-[11.5px] text-white/45">
-                    <span className="inline-flex items-center gap-1.5"><ILock size={11}/> OAuth 2.0</span>
-                    <span className="inline-flex items-center gap-1.5"><ICheck size={11}/> No credit card</span>
-                    <span className="inline-flex items-center gap-1.5"><IBolt size={11}/> Live in 30s</span>
+                    <span className="inline-flex items-center gap-1.5"><ILock size={11}/> OAuth 2.0 · planned</span>
+                    <span className="inline-flex items-center gap-1.5"><ICheck size={11}/> Free during pilot</span>
+                    <span className="inline-flex items-center gap-1.5"><IBolt size={11}/> ~30s install</span>
                   </div>
                 </div>
               </div>
