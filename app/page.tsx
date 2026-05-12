@@ -726,10 +726,10 @@ const ChatSection = () => {
               <span className="text-gradient-violet">Just describe it.</span>
             </h2>
             <p className="mt-4 text-white/60 max-w-md">
-              The Director will let you brief the video like you would a creative producer — mood, palette, references. Re-cut on demand. The chat below is a preview of the interface; the model-driven re-cut lands in the next sprint.
+              Brief the video like you&apos;d brief a producer. Tell it the mood you want, films it should feel like. The chat below is a mockup right now. The part that actually reads what you wrote and re-cuts the video is what we&apos;re building next.
             </p>
             <ul className="mt-6 space-y-2 text-[13.5px] text-white/65">
-              {['Talk like you would to a creative producer.','Reference moods or films, not effects.','One brief, one re-render. Iterate until it clicks.'].map(x => (
+              {['Talk like you would to a producer.','Reference moods or films, not effects.','One brief, one re-render. Try again if it misses.'].map(x => (
                 <li key={x} className="flex items-start gap-2"><ICheck size={14} className="text-violet-soft mt-0.5"/> {x}</li>
               ))}
             </ul>
@@ -944,7 +944,7 @@ const BackfillSection = () => {
             Already have a store? <span className="text-gradient">Render your catalog right now</span>.
           </h2>
           <p className="mt-4 text-white/55 max-w-xl mx-auto">
-            Paste any Shopify store URL. We&apos;ll enumerate the first 5 products via the public storefront feed and submit each to the same Gemini + Shotstack pipeline. Works without OAuth or install.
+            Paste any Shopify store URL. We grab the first 5 products from the public catalog and run them through the same pipeline a paying merchant gets. You don&apos;t have to install anything or hand over OAuth.
           </p>
         </div>
 
@@ -980,7 +980,7 @@ const BackfillSection = () => {
                     ))}
                   </div>
                   <div className="mt-4 rounded-lg bg-amber/8 border border-amber/30 text-amber/90 text-[12.5px] px-3.5 py-2.5 leading-relaxed">
-                    <strong className="font-semibold">Heads up:</strong> this only works if your store exposes the public <code className="font-mono text-amber bg-amber/10 px-1 rounded">/products.json</code> feed (most Shopify stores do by default). Stores behind anti-bot or with the storefront API disabled will need the Admin API + OAuth route, which is in the next sprint.
+                    <strong className="font-semibold">Heads up:</strong> works on most Shopify stores. A few (Kotn, Liquid IV, Gymshark) block the public <code className="font-mono text-amber bg-amber/10 px-1 rounded">/products.json</code> with anti-bot. Those need the Admin API + OAuth route, which is on the way.
                   </div>
                   {error && <div className="mt-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-[13px] px-3.5 py-2.5">{error}</div>}
                 </>
@@ -1221,7 +1221,7 @@ const ScrapeSection = () => {
               Paste a Shopify product URL — <span className="text-gradient-violet">get a finished video</span> in 30 seconds.
             </h2>
             <p className="mt-4 text-white/55 max-w-xl">
-              Works with any public Shopify store. We hit the storefront <span className="font-mono text-white/75">/products/&lt;handle&gt;.json</span> endpoint, run Gemini analysis on the product, then render the Cinematic Showcase template. No auth, no setup.
+              Works with any public Shopify store. We hit <span className="font-mono text-white/75">/products/&lt;handle&gt;.json</span>, run Gemini on the product, then render the Cinematic Showcase template. You don&apos;t need to log in or install anything.
             </p>
           </div>
         </div>
@@ -1484,11 +1484,11 @@ const BeforeAfterSection = () => (
       <div className="text-center max-w-3xl mx-auto">
         <SectionEyebrow icon={<IWand size={12}/>}>Image quality, automatic</SectionEyebrow>
         <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white">
-          We don&apos;t just shoot the video.{' '}
-          <span className="text-gradient-violet">We fix your photos first.</span>
+          Bad source photos make bad video ads.{' '}
+          <span className="text-gradient-violet">So we fix the photos first.</span>
         </h2>
         <p className="mt-4 text-white/55 max-w-xl mx-auto">
-          Most Shopify merchants upload low-res product shots — sometimes pulled from the web at 144p. Before rendering, every image runs through Gemini 2.5 Flash Image (Nano Banana) for detail recovery. Same product, same composition, sharper everything.
+          A lot of merchants upload low-res product photos. Some pull them off Google at 144p. Before we render anything, each image goes through Nano Banana (Gemini 2.5 Flash Image) for a quality pass. Same shot, sharper pixels.
         </p>
         <p className="mt-2 text-[13px] font-mono text-violet-soft/80">drag the slider to compare</p>
       </div>
@@ -1616,7 +1616,7 @@ const ConnectShopifySection = () => {
               Install once. <span className="text-gradient">Every new product auto-renders</span>.
             </h2>
             <p className="mt-4 text-white/55 max-w-xl">
-              One-click OAuth install ships in the next sprint. The webhook + Gemini + Shotstack pipeline behind it already runs in production — pilot merchants are onboarded manually for now. Have an existing catalog and don&apos;t want to wait? Jump to the <a href="#backfill" className="underline decoration-brand/50 hover:decoration-brand text-white/80">backfill</a> below to render your whole store right now.
+              The pipeline (webhook, Gemini, Shotstack, email) is already running in production. The one-click install on this card isn&apos;t. That part is a mockup. We onboard pilot merchants manually for now. If you have a catalog and want videos today, the <a href="#backfill" className="underline decoration-brand/50 hover:decoration-brand text-white/80">backfill section</a> below works without install.
             </p>
           </div>
         </div>
