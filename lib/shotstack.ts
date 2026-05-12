@@ -59,9 +59,14 @@ export function buildRenderPayload(
   const aiSentences = (analysis.voiceover || '').split(/[.!?]+/).map((s) => s.trim()).filter((s) => s.length > 5);
 
   const year = String(new Date().getFullYear());
-  const brand = (brandName || 'NEW ARRIVAL').toUpperCase();
-  const model = product.title.toUpperCase();
-  const seller = (brandName || 'OFFICIAL STORE').toUpperCase();
+  // MAKE/SELLER slots are ~1131px wide at 80px font; cap brand at ~18 chars so it
+  // doesn't wrap or collide with the price chip. Most Shopify vendor names fit easily.
+  const brand = (brandName || 'NEW ARRIVAL').toUpperCase().slice(0, 18);
+  // MODEL slot is 1133×120 at 60px — anything over ~22 chars wraps to a 2nd line and
+  // collides with the YEAR/MAKE row above. Gemini's short_title compresses long Shopify
+  // titles to a 2-4 word ad headline; the hard slice is a final safety net.
+  const model = (analysis.short_title || product.title).toUpperCase().slice(0, 22);
+  const seller = (brandName || 'OFFICIAL STORE').toUpperCase().slice(0, 18);
   const type = 'NEW';
   const state = 'ONLINE';
   const postcode = 'WORLDWIDE';
