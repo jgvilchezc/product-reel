@@ -1124,10 +1124,14 @@ interface ScrapedProduct {
   sourceUrl: string;
 }
 
+// Verified live before each presentation — Gymshark and the death-wish-ground-coffee
+// handle stopped working (anti-bot / handle change) so they were swapped May 12 for
+// drinkolipop and a different Death Wish handle that returns 200 on .json. If you
+// rotate these, hit /api/scrape end-to-end on each one before shipping.
 const SAMPLE_SCRAPE_URLS = [
   'https://www.allbirds.com/products/mens-tree-runners',
-  'https://us.gymshark.com/products/gymshark-arrival-shorts-black-ss22',
-  'https://www.deathwishcoffee.com/products/death-wish-ground-coffee',
+  'https://drinkolipop.com/products/strawberry-vanilla',
+  'https://www.deathwishcoffee.com/products/classic-cold-brew-latte',
 ];
 
 const ScrapeSection = () => {
