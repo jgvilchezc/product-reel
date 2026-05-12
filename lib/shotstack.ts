@@ -77,25 +77,33 @@ export function buildRenderPayload(
   const type = 'NEW';
   const state = 'ONLINE';
   const postcode = 'WORLDWIDE';
+  // SPEC slot is a 700×90 right-aligned box at size 40 in Scene 2, next to the $PRICE
+  // chip. Anything over ~22 chars wraps to 2-3 lines and bleeds UP into the $PRICE row.
+  // Gemini's spec field is constrained to 22 chars; the slice is a hard safety net for
+  // the legacy fallback path (first sentence of body_html).
   const spec = (
     analysis.spec ||
     descSentences[0] ||
     aiSentences[0] ||
     'PREMIUM QUALITY'
-  ).toUpperCase().slice(0, 60);
+  ).toUpperCase().slice(0, 22);
+  // INTERIOR/UPGRADES render in 1000-903 wide boxes at size 36 (Scenes 3-4). At 100 chars
+  // they fit in 3 lines, which is what the box height (250-300px) was sized for. The
+  // previous 150-char cap allowed 4+ lines that collided with the FEATURES/UPGRADES
+  // header above.
   const interior = (
     analysis.interior ||
     descSentences.slice(0, 2).join('. ') ||
-    description.slice(0, 150) ||
+    description.slice(0, 100) ||
     aiSentences.slice(0, 2).join('. ') ||
     'Crafted with premium materials.'
-  ).slice(0, 150);
+  ).slice(0, 100);
   const upgrades = (
     analysis.upgrades ||
     descSentences.slice(2, 5).join('. ') ||
     aiSentences.slice(0, 3).join('. ') ||
     'Designed for performance and comfort.'
-  ).slice(0, 150);
+  ).slice(0, 100);
   const odometer = `\$${product.price}`;
   const priceText = `\$${product.price}`;
 
@@ -241,7 +249,10 @@ export function buildRenderPayload(
                 type: 'text',
                 text: '{{ SPEC }}',
                 font: { family: 'Montserrat SemiBold', color: textColor, size: 40 },
-                alignment: { horizontal: 'right' },
+                // vertical: 'top' anchors any wrapped overflow to grow DOWN, so it
+                // can't bleed up into the $PRICE row at y:0.035 even if SPEC exceeds
+                // its char budget. Belt + suspenders with the 22-char slice above.
+                alignment: { horizontal: 'right', vertical: 'top' },
                 width: 700,
                 height: 90,
               },

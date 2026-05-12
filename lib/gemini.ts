@@ -33,12 +33,14 @@ export interface GeminiAnalysis {
   // white sneakers, light food shots). Limited to a binary palette so brand consistency
   // holds — the template wasn't designed for arbitrary text colors.
   text_color?: '#ffffff' | '#111111';
-  // Optional legacy fields. shotstack.ts still reads these via `analysis.spec || …`
-  // fallbacks; keeping them optional avoids breaking that path when Gemini omits them.
+  // Optional copy fields used by the Cinematic Showcase merge slots. Constraints below
+  // are enforced both in the Gemini prompt AND by hard slices in coerceAnalysis — the
+  // template clips have fixed-size boxes and longer text wraps onto adjacent rows
+  // (e.g. a 60-char SPEC pushed up into the $PRICE row in the May 12 webhook bug).
   mood?: string;
-  spec?: string;
-  interior?: string;
-  upgrades?: string;
+  spec?: string;       // 2-4 word tagline, ≤22 chars
+  interior?: string;   // one short feature sentence, ≤90 chars
+  upgrades?: string;   // one short benefit sentence, ≤90 chars
 }
 
 const SYSTEM_PROMPT = `You are a professional video advertising director with deep expertise in visual composition and product photography.
@@ -81,6 +83,18 @@ Write:
   • "#ffffff" (white) — when the photo is mostly dark, mid-tone, or has saturated colors (black background, denim, brown leather, red car, navy hoodie, dark food shots).
   • "#111111" (near-black) — when the photo is mostly LIGHT (silver/chrome jewelry on white, white sneakers on white seamless, beige beauty product on cream, light food on marble, off-white linen).
   Default to "#ffffff" if uncertain. This decision is critical: white text on a silver bracelet against a white background is invisible.
+- spec: A short product tagline displayed next to the price chip in Scene 2. 2-4 WORDS, MAXIMUM 22 CHARACTERS including spaces. Anything longer wraps onto 3 lines and visually collides with the $PRICE row above. Examples:
+  • Allbirds Tree Runner → "BREATHABLE COMFORT"
+  • Sterling silver bracelet → "STERLING SILVER"
+  • iPhone 16 Pro → "TITANIUM DESIGN"
+  • Glossier Cloud Paint → "BUILDABLE BLUSH"
+  Use all-caps style. Count characters before answering.
+- interior: One short sentence describing how the product FEELS or its main FEATURE. MAXIMUM 90 CHARACTERS. Renders as body copy in Scene 3 under a "FEATURES" header. Examples:
+  • "Soft merino wool wrapped around a lightweight foam sole for all-day comfort."
+  • "Sterling silver with a tarnish-resistant finish and a heart-shaped clasp."
+- upgrades: One short sentence on the standout BENEFIT or what makes it special. MAXIMUM 90 CHARACTERS. Renders as body copy in Scene 4 under an "UPGRADES" header. Examples:
+  • "Machine washable. Made from sustainable materials. Travel-ready."
+  • "Hypoallergenic and water-resistant. Designed for everyday wear."
 
 ---
 
@@ -92,8 +106,9 @@ Check your own output against these criteria:
 [ ] If the product fills most of the frame, is needs_text_background set to true? Fix if not.
 [ ] Is short_title ≤22 chars and 2-4 words? Count characters. If over, shorten further.
 [ ] Would a person reading text_color on top of this image be able to read it? If a white-on-white or black-on-black collision would happen, flip the color.
+[ ] Is spec ≤22 chars? Is interior ≤90 chars? Is upgrades ≤90 chars? Count and trim if any are over.
 
-Only produce output after passing all 6 checks.
+Only produce output after passing all 7 checks.
 
 ---
 
@@ -107,7 +122,10 @@ Return ONLY a raw JSON object. No markdown, no explanation, no backticks. Start 
   "needs_text_background": true | false,
   "product_category": "fashion | footwear | electronics | beauty | food | home | sports | jewelry | other",
   "short_title": "string — 2-4 words, MAX 22 chars, all caps style headline",
-  "text_color": "#ffffff" | "#111111"
+  "text_color": "#ffffff" | "#111111",
+  "spec": "string — 2-4 words, MAX 22 chars, tagline",
+  "interior": "string — one sentence, MAX 90 chars, feature description",
+  "upgrades": "string — one sentence, MAX 90 chars, benefit description"
 }`;
 
 const VALID_POSITIONS: TextPosition[] = ['top', 'bottom', 'split'];
@@ -193,6 +211,13 @@ function coerceAnalysis(raw: unknown, product: ProductInput): GeminiAnalysis {
   // a CSS name) falls back to white — matches the legacy template behavior.
   const text_color: '#ffffff' | '#111111' = r.text_color === '#111111' ? '#111111' : '#ffffff';
 
+  // Hard slices guarantee the merge-field text never exceeds what the template clip
+  // boxes can hold. Empty strings fall through to the description-parsing path in
+  // shotstack.ts (which has its own slices), so we don't substitute fallbacks here.
+  const spec = typeof r.spec === 'string' ? r.spec.trim().slice(0, 22) : undefined;
+  const interior = typeof r.interior === 'string' ? r.interior.trim().slice(0, 90) : undefined;
+  const upgrades = typeof r.upgrades === 'string' ? r.upgrades.trim().slice(0, 90) : undefined;
+
   return {
     voiceover,
     background_prompt,
@@ -201,6 +226,9 @@ function coerceAnalysis(raw: unknown, product: ProductInput): GeminiAnalysis {
     product_category,
     short_title,
     text_color,
+    spec,
+    interior,
+    upgrades,
   };
 }
 
