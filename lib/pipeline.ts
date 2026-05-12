@@ -67,12 +67,35 @@ export function shopifyToProductInput(product: ShopifyProduct): {
   //   3. Merchant order on Shopify is usually best-first, so the first 5 cover the
   //      most important angles. Gemini still ranks within those 5 via image_priority.
   // Bump to 10 if we ever move to Vercel Pro (300s maxDuration).
-  const imageUrls = (product.images || [])
+  //
+  // We also filter unsupported extensions HERE rather than letting normalizeImageUrl
+  // throw downstream. AVIF in particular is rejected by Shotstack ("format not
+  // supported"), and Shopify CDN serves whatever format the merchant uploaded —
+  // so a single .avif in the source array used to kill the whole render and leave
+  // the webhook silently failing inside Vercel's after() callback. (User-flagged,
+  // May 12: Nike test product with mixed jpg/avif images never produced a video.)
+  const SHOTSTACK_SUPPORTED = /\.(jpe?g|png|gif|webp|bmp|tiff)(\?|#|$)/i;
+  const allUrls = (product.images || [])
     .map((i) => i.src)
-    .filter((s): s is string => typeof s === 'string' && s.length > 0)
-    .slice(0, 5);
+    .filter((s): s is string => typeof s === 'string' && s.length > 0);
+  const supportedUrls = allUrls.filter((u) => SHOTSTACK_SUPPORTED.test(u));
+  const dropped = allUrls.length - supportedUrls.length;
+  if (dropped > 0) {
+    console.warn(
+      `[shopifyToProductInput] dropped ${dropped}/${allUrls.length} image(s) with ` +
+      `unsupported format (likely .avif/.heic). ${supportedUrls.length} valid remaining.`
+    );
+  }
+  const imageUrls = supportedUrls.slice(0, 5);
 
   if (imageUrls.length === 0) {
+    if (allUrls.length > 0) {
+      throw new Error(
+        `Product has ${allUrls.length} image(s) but none are in a Shotstack-supported ` +
+        `format (jpg/png/webp/gif/bmp/tiff). Avif and Heic are NOT supported. ` +
+        `Re-upload at least one image in a supported format and retry.`
+      );
+    }
     throw new Error('No product images found');
   }
 
