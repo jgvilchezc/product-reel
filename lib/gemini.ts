@@ -64,6 +64,10 @@ Look at the image carefully and determine:
 - Where are the empty/clean areas with no important content?
 - What is the dominant background color or texture?
 - What is the product category? Choose one: fashion / footwear / electronics / beauty / food / home / sports / jewelry / other
+  • food INCLUDES all edible and drinkable products: snacks, ingredients, prepared meals, AND BEVERAGES (soda, juice, water, coffee, tea, beer, wine, energy drinks, protein shakes).
+  • home INCLUDES candles, decor, kitchenware, bedding, furniture, cleaning products.
+  • sports INCLUDES activewear, yoga gear, gym equipment, supplements like protein powder.
+  • Use "other" ONLY when the product genuinely doesn't fit any of the above (e.g. art prints, pet supplies, books). Most products fit one of the named categories — try hard before defaulting to "other".
 
 ---
 
@@ -91,12 +95,22 @@ Write:
   • "#ffffff" (white) — when the photo is mostly dark, mid-tone, or has saturated colors (black background, denim, brown leather, red car, navy hoodie, dark food shots).
   • "#111111" (near-black) — when the photo is mostly LIGHT (silver/chrome jewelry on white, white sneakers on white seamless, beige beauty product on cream, light food on marble, off-white linen).
   Default to "#ffffff" if uncertain. This decision is critical: white text on a silver bracelet against a white background is invisible.
-- spec: A short product tagline displayed next to the price chip in Scene 2. 2-4 WORDS, MAXIMUM 22 CHARACTERS including spaces. Anything longer wraps onto 3 lines and visually collides with the $PRICE row above. Examples:
+- spec: A short product tagline displayed next to the price chip in Scene 2. 2-4 WORDS, MAXIMUM 22 CHARACTERS including spaces. Anything longer wraps onto 3 lines and visually collides with the $PRICE row above.
+  REQUIRED — DO NOT return an empty string. Every product has a defining feature; if uncertain, describe the material, format, or function in 2-3 words.
+  Examples covering common e-commerce verticals:
   • Allbirds Tree Runner → "BREATHABLE COMFORT"
   • Sterling silver bracelet → "STERLING SILVER"
   • iPhone 16 Pro → "TITANIUM DESIGN"
   • Glossier Cloud Paint → "BUILDABLE BLUSH"
-  Use all-caps style. Count characters before answering.
+  • Olipop strawberry soda → "SPARKLING TONIC"
+  • Death Wish coffee beans → "WHOLE BEAN ROAST"
+  • Stanley travel mug → "VACUUM INSULATED"
+  • Lululemon align leggings → "BUTTERY SOFT"
+  • Hand-poured candle → "SOY WAX BLEND"
+  • Leather wallet → "FULL-GRAIN LEATHER"
+  • Yoga mat → "NON-SLIP GRIP"
+  • Protein powder → "WHEY ISOLATE"
+  Use all-caps style. Count characters before answering. NEVER return the product category name itself ("FOOD", "OTHER", "FOOTWEAR") — that reads as a debug label, not a tagline.
 - interior: One short sentence describing how the product FEELS or its main FEATURE. MAXIMUM 90 CHARACTERS. Renders as body copy in Scene 3 under a "FEATURES" header. Examples:
   • "Soft merino wool wrapped around a lightweight foam sole for all-day comfort."
   • "Sterling silver with a tarnish-resistant finish and a heart-shaped clasp."

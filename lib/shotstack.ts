@@ -91,14 +91,20 @@ export function buildRenderPayload(
   const postcode = 'WORLDWIDE';
   // SPEC slot is a 700×90 right-aligned box at size 40 in Scene 2, only ~85px below
   // the ODOMETER ($PRICE) at y:0.035. The legacy fallback to descSentences[0] kept
-  // injecting marketing sentences from body_html (60+ chars) that wrapped to 3 lines
-  // and bled UP into the price row, even after the slice clamped to 22 chars (because
-  // the slice still produced multi-word strings that wrapped at size 40 in some fonts).
-  // New policy: prefer Gemini's tagline; otherwise fall back to product_category
-  // (always ≤11 chars: footwear, jewelry, electronics…) which guarantees one line.
-  // No more body_html sentence parsing for this slot.
+  // injecting marketing sentences from body_html (60+ chars) that wrapped to 3 lines.
+  // Current fallback chain, in priority order:
+  //   1. Gemini's spec tagline (preferred — e.g. "SPARKLING TONIC", "TITANIUM DESIGN").
+  //   2. product_category UNLESS it's "other" — rendering "OTHER" next to the price
+  //      reads as a debug label, not a tagline. (User-flagged on Olipop + Allbirds
+  //      where Gemini omitted spec and the category was "other".)
+  //   3. brandName — always present, always informative even if it duplicates Scene 1.
+  //   4. "NEW ARRIVAL" — generic catch-all.
   const geminiSpec = (analysis.spec || '').trim();
-  const spec = (geminiSpec || analysis.product_category).toUpperCase().slice(0, 22);
+  const categoryIsUseful = analysis.product_category && analysis.product_category !== 'other';
+  const specFallback = categoryIsUseful
+    ? analysis.product_category
+    : (brandName || 'NEW ARRIVAL');
+  const spec = (geminiSpec || specFallback).toUpperCase().slice(0, 22);
   // INTERIOR/UPGRADES render in 1000-903 wide boxes at size 36 (Scenes 3-4). At 100 chars
   // they fit in 3 lines, which is what the box height (250-300px) was sized for. The
   // previous 150-char cap allowed 4+ lines that collided with the FEATURES/UPGRADES
