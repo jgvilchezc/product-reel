@@ -76,12 +76,23 @@ function pickVariantPrice(
 }
 
 export async function POST(req: NextRequest) {
-  let body: { productUrl?: string; geminiKey?: string; notifyEmail?: string } = {};
+  let body: {
+    productUrl?: string;
+    geminiKey?: string;
+    notifyEmail?: string;
+    enhance?: boolean;
+  } = {};
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Body must be JSON' }, { status: 400 });
   }
+
+  // Accept ?enhance=true on the query string too so the outreach pre-render script
+  // can flip it without rebuilding the JSON body.
+  const enhanceQs = req.nextUrl.searchParams.get('enhance');
+  const enhanceImagesOption =
+    body.enhance === true || enhanceQs === 'true' || enhanceQs === '1';
 
   if (!body.productUrl || typeof body.productUrl !== 'string') {
     return NextResponse.json(
@@ -122,6 +133,7 @@ export async function POST(req: NextRequest) {
     const { renderIds } = await processProduct(product, {
       geminiKey,
       notifyEmail: body.notifyEmail,
+      enhanceImagesOption,
     });
 
     return NextResponse.json({

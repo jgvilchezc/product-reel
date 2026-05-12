@@ -5,6 +5,7 @@ import {
   submitRender,
   getRenderStatus,
 } from './shotstack';
+import { enhanceImages } from './imageEnhance';
 
 export type { ProductInput };
 
@@ -24,6 +25,11 @@ export interface ProcessOptions {
   // Override Gemini's image source — used by /api/simulate where Shotstack reads from a public URL
   // but Gemini reads a base64 data URL from the local filesystem.
   geminiImageOverride?: string;
+  // When true, runs each source image through Gemini 2.5 Flash Image (Nano Banana) for
+  // detail recovery before submitting to Shotstack. Adds ~$0.28 cost and 3-5s latency per
+  // pipeline run. Default off — turn on for offline pre-renders (Phase 1 outreach script)
+  // where the latency budget is generous.
+  enhanceImagesOption?: boolean;
 }
 
 export interface ProcessResult {
@@ -80,8 +86,21 @@ export async function processProduct(
 
   const analysis = await analyzeProduct(geminiInput, options.geminiKey);
 
+  // Optional image-quality pass. Gated by flag so the default Shopify webhook path
+  // (tight 60s maxDuration) keeps its current timing. /api/scrape exposes this for
+  // the Phase 1 outreach pre-renders where latency doesn't matter.
+  let renderInput = productInput;
+  if (options.enhanceImagesOption) {
+    const enhanced = await enhanceImages(
+      productInput.images,
+      analysis.product_category,
+      options.geminiKey
+    );
+    renderInput = { ...productInput, images: enhanced };
+  }
+
   const renderId = await submitRender(
-    buildRenderPayload(productInput, analysis, undefined, brandName)
+    buildRenderPayload(renderInput, analysis, undefined, brandName)
   );
   const renderIds: string[] = [renderId];
 

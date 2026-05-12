@@ -83,6 +83,9 @@ export async function POST(req: NextRequest) {
   // pollAndEmail as a nested void promise lets it die when processProduct resolves.
   after(async () => {
     try {
+      // TODO(image-enhance): once Nano Banana latency is measured in production via
+      // the /api/scrape outreach script, flip `enhanceImagesOption: true` here too.
+      // Currently off because we're already against the 60s maxDuration ceiling.
       const { renderIds, pollAndEmailPromise } = await processProduct(product, {
         geminiKey,
         notifyEmail,
