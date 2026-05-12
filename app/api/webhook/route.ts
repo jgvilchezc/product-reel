@@ -83,30 +83,30 @@ export async function POST(req: NextRequest) {
   // pollAndEmail as a nested void promise lets it die when processProduct resolves.
   after(async () => {
     try {
-      // Nano Banana enhancement DISABLED on webhook flow for email reliability.
-      // Background: we briefly enabled it (May 12 commit 702d66b) thinking the
-      // latency budget fit after dropping the source-image cap to 5. It didn't,
-      // but the bug was masked because uploadImageToIngest was broken and silently
-      // fell back to original URLs in ~0.5s. Once the Ingest fix landed (commit
-      // a599014), Nano Banana actually started working — and added 15-25s to the
-      // pre-poll phase, pushing total runtime past Vercel Hobby's 60s ceiling.
-      // The Lavadora render that triggered this revert: completed in Shotstack
-      // but the lambda died before pollAndEmail saw "done" and could send the
-      // merchant their email. (User-flagged May 12.)
+      // Nano Banana enabled — but we DON'T pollAndEmail inline. The pipeline submits
+      // the render with a `callback` URL pointing to /api/shotstack-callback; Shotstack
+      // POSTs there when the render completes, and THAT handler sends the email. This
+      // decouples the merchant email from this lambda's 60s budget, which was getting
+      // blown by Gemini (10s) + Nano Banana enhance (20s) + render poll (30-50s) chained
+      // serially. (Lavadora regression May 12.)
       //
-      // The webhook prioritizes "render submitted + merchant emailed" reliability
-      // over per-image enhancement. Users who want Nano Banana can trigger it
-      // explicitly via /api/scrape?enhance=true where the 60s ceiling is more
-      // forgiving (no pollAndEmail latency to contend with).
-      const { renderIds, pollAndEmailPromise } = await processProduct(product, {
+      // Merchant context (email/product/brand) rides on the callback URL as query
+      // params so the callback handler can reconstruct it without state.
+      const origin = req.headers.get('x-forwarded-host')
+        ? `https://${req.headers.get('x-forwarded-host')}`
+        : req.nextUrl.origin;
+      const productTitle = product.title?.slice(0, 80) || 'your product';
+      const brandName = product.vendor?.slice(0, 40) || 'your store';
+      const callbackUrl = `${origin}/api/shotstack-callback?email=${encodeURIComponent(notifyEmail)}&product=${encodeURIComponent(productTitle)}&brand=${encodeURIComponent(brandName)}`;
+      const { renderIds } = await processProduct(product, {
         geminiKey,
         notifyEmail,
+        enhanceImagesOption: true,
+        callbackUrl,
       });
-      console.log(`[webhook] product ${product.id} renders submitted:`, renderIds);
-      if (pollAndEmailPromise) {
-        await pollAndEmailPromise;
-        console.log(`[webhook] product ${product.id} email pipeline complete`);
-      }
+      console.log(`[webhook] product ${product.id} renders submitted (callback wired):`, renderIds);
+      // No await on pollAndEmail here — Shotstack will POST /api/shotstack-callback
+      // when the render terminates and that handler sends the merchant email.
     } catch (err) {
       console.error(`[webhook] product ${product.id} pipeline failed:`, err);
     }

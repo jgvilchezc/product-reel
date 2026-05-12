@@ -21,6 +21,7 @@ export interface ShopifyProduct {
 export interface ProcessOptions {
   geminiKey: string;
   // If set, fires a background poll-and-email task once renders are submitted.
+  // Ignored when callbackUrl is also set — the callback handler emails instead.
   notifyEmail?: string;
   // Override Gemini's image source — used by /api/simulate where Shotstack reads from a public URL
   // but Gemini reads a base64 data URL from the local filesystem.
@@ -30,6 +31,13 @@ export interface ProcessOptions {
   // pipeline run. Default off — turn on for offline pre-renders (Phase 1 outreach script)
   // where the latency budget is generous.
   enhanceImagesOption?: boolean;
+  // When set, Shotstack POSTs the render result to this URL on done/failed. Decouples
+  // email delivery from the calling lambda — used by the webhook flow so it can fit
+  // Gemini + Nano Banana + Shotstack submit inside the 60s Vercel Hobby ceiling without
+  // also having to wait for render completion. The callback handler at
+  // /api/shotstack-callback reads merchant context from query params on this URL.
+  // When set, processProduct skips its internal pollAndEmail entirely.
+  callbackUrl?: string;
 }
 
 export interface ProcessResult {
@@ -158,12 +166,15 @@ export async function processProduct(
   const renderInput: ProductInput = { ...productInput, images: finalImages };
 
   const renderId = await submitRender(
-    buildRenderPayload(renderInput, analysis, undefined, brandName)
+    buildRenderPayload(renderInput, analysis, undefined, brandName, options.callbackUrl)
   );
   const renderIds: string[] = [renderId];
 
+  // If a callbackUrl is set, Shotstack POSTs to it directly when the render finishes —
+  // /api/shotstack-callback handles the email from there. We skip pollAndEmail to avoid
+  // double-emailing (and to free the calling lambda from the 30-50s render-poll wait).
   let pollAndEmailPromise: Promise<void> | undefined;
-  if (options.notifyEmail) {
+  if (options.notifyEmail && !options.callbackUrl) {
     const email = options.notifyEmail;
     pollAndEmailPromise = pollAndEmail(renderIds, productInput.title, brandName, email).catch(
       (err) => {

@@ -51,6 +51,7 @@ export function buildRenderPayload(
   analysis: GeminiAnalysis,
   audioUrl?: string,
   brandName?: string,
+  callbackUrl?: string,
 ) {
   const images = product.images.slice(0, 7).map(normalizeImageUrl);
   while (images.length > 0 && images.length < 7) {
@@ -723,6 +724,10 @@ export function buildRenderPayload(
       { find: 'PRICE', replace: priceText },
       { find: 'STORE', replace: seller },
     ],
+    // When set, Shotstack POSTs the render result to this URL on terminal status
+    // (done/failed). Lets the webhook flow exit early without polling. Merchant
+    // context (email/product/brand) is encoded as query params on the URL itself.
+    ...(callbackUrl ? { callback: callbackUrl } : {}),
   };
 }
 
