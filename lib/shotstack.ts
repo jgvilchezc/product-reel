@@ -1,6 +1,11 @@
 import type { GeminiAnalysis, ProductInput } from './gemini';
 
 const SHOTSTACK_BASE = 'https://api.shotstack.io/edit/stage';
+// Ingest API lives on a separate base path. Until this constant existed,
+// uploadImageToIngest was hitting /edit/stage/upload (404) and Nano Banana
+// silently fell back to original URLs in every enhance call. Discovered
+// May 12 via stress test + /api/diag-enhance.
+const SHOTSTACK_INGEST_BASE = 'https://api.shotstack.io/ingest/stage';
 const API_KEY = process.env.SHOTSTACK_API_KEY ?? '';
 
 interface ShotstackClip {
@@ -756,18 +761,68 @@ function buildImageClipsWithEffects(images: string[], totalDuration: number, eff
   }));
 }
 
+interface IngestSourceResponse {
+  data?: {
+    type?: string;
+    id?: string;
+    attributes?: { status?: string; source?: string; url?: string };
+  };
+}
+
+// Polls a freshly-created Ingest source until status === 'ready' (URL available)
+// or 'failed'/timeout. Default budget: 20 attempts × 1.5s = 30s.
+async function pollIngestSourceUntilReady(sourceId: string, maxAttempts = 20, intervalMs = 1500): Promise<string> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const res = await fetch(`${SHOTSTACK_INGEST_BASE}/sources/${sourceId}`, {
+      headers: { 'x-api-key': API_KEY },
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Ingest poll error ${res.status}: ${err.slice(0, 200)}`);
+    }
+    const data = (await res.json()) as IngestSourceResponse;
+    const status = data.data?.attributes?.status;
+    if (status === 'ready') {
+      const url = data.data?.attributes?.source || data.data?.attributes?.url;
+      if (!url) throw new Error('Ingest source ready but no URL in response');
+      return url;
+    }
+    if (status === 'failed') {
+      throw new Error('Ingest source processing failed');
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error(`Ingest source ${sourceId} did not become ready in ${maxAttempts * intervalMs}ms`);
+}
+
+/**
+ * Uploads a data URI (Nano Banana base64 output) to Shotstack Ingest, which hosts it
+ * on their CDN and returns a public HTTPS URL usable by the Edit API's render clips.
+ *
+ * Shotstack Ingest is async: POST /sources returns an ID; we must then poll
+ * GET /sources/{id} until attributes.status === 'ready' to read back the hosted URL.
+ *
+ * Previously this function pointed at /edit/stage/upload (404 — wrong path) and tried
+ * to read `data.response.attributes.url` from the immediate response (wrong shape).
+ * Both bugs combined caused enhanceImages to silently fall back to original URLs in
+ * every call. Discovered May 12.
+ */
 export async function uploadImageToIngest(dataUri: string): Promise<string> {
-  const res = await fetch(`${SHOTSTACK_BASE}/upload`, {
+  const postRes = await fetch(`${SHOTSTACK_INGEST_BASE}/sources`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
     body: JSON.stringify({ url: dataUri }),
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Shotstack ingest error ${res.status}: ${err}`);
+  if (!postRes.ok) {
+    const err = await postRes.text();
+    throw new Error(`Shotstack ingest POST error ${postRes.status}: ${err.slice(0, 200)}`);
   }
-  const data = await res.json();
-  return data.response.attributes.url as string;
+  const postData = (await postRes.json()) as IngestSourceResponse;
+  const sourceId = postData.data?.id;
+  if (!sourceId) {
+    throw new Error('Shotstack ingest POST returned no source id');
+  }
+  return pollIngestSourceUntilReady(sourceId);
 }
 
 export async function submitRender(payload: Record<string, unknown>): Promise<string> {
