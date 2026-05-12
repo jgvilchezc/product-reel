@@ -60,6 +60,7 @@ const Navbar = () => (
       <nav className="flex items-center gap-1 sm:gap-2">
         <a href="#how-it-works" className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">How it works</a>
         <a href="#scrape"       className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">Scrape</a>
+        <a href="#quality"      className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">Quality</a>
         <a href="#connect"      className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">Connect</a>
         <a href="#chat"         className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">AI Director</a>
         <a href="#setup"        className="hidden md:inline text-[13px] text-white/60 hover:text-white px-3 py-2 transition-colors">Setup</a>
@@ -1400,6 +1401,125 @@ const fmtRelative = (ms: number) => {
   return `${Math.floor(h / 24)} d ago`;
 };
 
+// ── BEFORE / AFTER (NANO BANANA QUALITY DEMO) ─────────────────
+// Live demo of the Nano Banana enhancement step. Each card is a drag-to-reveal
+// slider — the right side starts visible (enhanced), drag left to see the original.
+// The 4 pairs are real merchant images (the 144px Nike t-shirt JPEGs the user
+// tested with) and their Nano Banana outputs, downloaded once and committed to
+// /public/test/enhanced/ so the page loads instantly without hitting the API on
+// every visit. Visual consistency claim: each enhancement was a separate call;
+// none used the same source.
+
+interface BeforeAfterPair { before: string; after: string; label: string; }
+
+const BEFORE_AFTER_PAIRS: BeforeAfterPair[] = [
+  { before: '/test/f1.jpeg', after: '/test/enhanced/f1.jpg', label: 'Black Performance Tee · 148px source' },
+  { before: '/test/f2.jpeg', after: '/test/enhanced/f2.jpg', label: 'White Swoosh Tee · 216px source' },
+  { before: '/test/f3.jpeg', after: '/test/enhanced/f3.jpg', label: 'Black Logo Tee · 194px source' },
+  { before: '/test/f4.jpeg', after: '/test/enhanced/f4.jpg', label: 'Performance Front · 148px source' },
+];
+
+const BeforeAfterCard = ({ pair }: { pair: BeforeAfterPair }) => {
+  const [pos, setPos] = useState(50);
+  const ref = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
+  const updatePos = (clientX: number) => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const p = Math.max(0, Math.min(100, (x / rect.width) * 100));
+    setPos(p);
+  };
+
+  return (
+    <div>
+      <div
+        ref={ref}
+        onMouseDown={(e) => { dragging.current = true; updatePos(e.clientX); }}
+        onMouseMove={(e) => { if (dragging.current) updatePos(e.clientX); }}
+        onMouseUp={() => { dragging.current = false; }}
+        onMouseLeave={() => { dragging.current = false; }}
+        onTouchStart={(e) => { dragging.current = true; updatePos(e.touches[0].clientX); }}
+        onTouchMove={(e) => { if (dragging.current) updatePos(e.touches[0].clientX); }}
+        onTouchEnd={() => { dragging.current = false; }}
+        className="relative aspect-square overflow-hidden rounded-xl cursor-ew-resize select-none bg-[#0a0b10] border border-line"
+      >
+        {/* AFTER fills the box */}
+        <img src={pair.after} alt="enhanced" className="absolute inset-0 w-full h-full object-cover" draggable={false}/>
+        <span className="absolute top-2.5 right-2.5 text-[10px] font-mono uppercase tracking-[0.18em] text-white bg-violet/70 backdrop-blur px-1.5 py-0.5 rounded">enhanced</span>
+
+        {/* BEFORE clipped to the left of the slider */}
+        <div
+          className="absolute inset-0 overflow-hidden pointer-events-none"
+          style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
+        >
+          <img src={pair.before} alt="original" className="absolute inset-0 w-full h-full object-cover" draggable={false}/>
+          <span className="absolute top-2.5 left-2.5 text-[10px] font-mono uppercase tracking-[0.18em] text-white bg-black/60 backdrop-blur px-1.5 py-0.5 rounded">before</span>
+        </div>
+
+        {/* Drag handle */}
+        <div
+          className="absolute top-0 bottom-0 w-0.5 bg-white pointer-events-none shadow-[0_0_12px_rgba(124,92,255,0.65)]"
+          style={{ left: `${pos}%`, transform: 'translateX(-50%)' }}
+        >
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white shadow-lg flex items-center justify-center pointer-events-none">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+              <polyline points="9 18 15 12 9 6" transform="translate(-2 0)"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div className="mt-2.5 text-[12px] font-mono text-white/45 text-center">{pair.label}</div>
+    </div>
+  );
+};
+
+const BeforeAfterSection = () => (
+  <section id="quality" className="relative border-t border-line">
+    <div className="absolute inset-0 pointer-events-none"
+         style={{ background: 'radial-gradient(60% 50% at 50% 0%,rgba(124,92,255,0.20),transparent 60%),radial-gradient(40% 40% at 80% 30%,rgba(61,123,255,0.14),transparent 60%)' }}/>
+    <div className="relative max-w-6xl mx-auto px-6 py-20 sm:py-28">
+      <div className="text-center max-w-3xl mx-auto">
+        <SectionEyebrow icon={<IWand size={12}/>}>Image quality, automatic</SectionEyebrow>
+        <h2 className="mt-3 font-display text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white">
+          We don&apos;t just shoot the video.{' '}
+          <span className="text-gradient-violet">We fix your photos first.</span>
+        </h2>
+        <p className="mt-4 text-white/55 max-w-xl mx-auto">
+          Most Shopify merchants upload low-res product shots — sometimes pulled from the web at 144p. Before rendering, every image runs through Gemini 2.5 Flash Image (Nano Banana) for detail recovery. Same product, same composition, sharper everything.
+        </p>
+        <p className="mt-2 text-[13px] font-mono text-violet-soft/80">drag the slider to compare</p>
+      </div>
+
+      <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {BEFORE_AFTER_PAIRS.map((p) => <BeforeAfterCard key={p.before} pair={p}/>)}
+      </div>
+
+      <div className="mt-10 max-w-2xl mx-auto rounded-xl border border-line bg-card/60 px-5 py-4">
+        <div className="grid sm:grid-cols-3 gap-4 text-center">
+          <div>
+            <div className="font-mono text-[10.5px] uppercase tracking-widest text-white/40">Source</div>
+            <div className="mt-1 font-display text-lg text-white">140–216 px</div>
+            <div className="text-[11px] text-white/45">avg 3 KB JPEG</div>
+          </div>
+          <div className="sm:border-x sm:border-line">
+            <div className="font-mono text-[10.5px] uppercase tracking-widest text-white/40">Model</div>
+            <div className="mt-1 font-display text-lg text-white">Nano Banana</div>
+            <div className="text-[11px] text-white/45">gemini-2.5-flash-image</div>
+          </div>
+          <div>
+            <div className="font-mono text-[10.5px] uppercase tracking-widest text-white/40">Output</div>
+            <div className="mt-1 font-display text-lg text-white">~1 MP PNG</div>
+            <div className="text-[11px] text-white/45">~10s per image (parallel)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+);
+
 const ConnectShopifySection = () => {
   const [installState, setInstallState] = useState<InstallState>('idle');
   const [shop, setShop] = useState('');
@@ -1696,6 +1816,7 @@ export default function Home() {
         <HowItWorks/>
         <DemoSection/>
         <ScrapeSection/>
+        <BeforeAfterSection/>
         <ConnectShopifySection/>
         <ChatSection/>
         <SetupSection/>
