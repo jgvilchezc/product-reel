@@ -5,8 +5,15 @@ import { processProduct, type ShopifyProduct } from '../../../lib/pipeline';
 // exposes at `<base>/products/<handle>.json` — no Admin API or OAuth required. The merchant
 // only needs to share a product URL.
 //
-// Input  : { productUrl: string, geminiKey?: string, notifyEmail?: string }
+// Input  : { productUrl: string, geminiKey?: string, notifyEmail?: string, enhance?: boolean }
 // Output : { success: true, renderIds: string[], product: { title, vendor, price, imageCount, sourceUrl } }
+//
+// Email delivery: when notifyEmail is supplied we wire Shotstack's callback to
+// /api/shotstack-callback with the merchant context on the query string. Shotstack pings
+// it when the render finishes (~30-60s later) and that handler sends the Resend email.
+// This is what lets a reviewer (Derk) test the demo in prod without sitting on the page —
+// the MP4 lands in their inbox the moment the render completes. We don't await it here;
+// this lambda returns the renderId as soon as the submit is in.
 //
 // Limitations: stores that have explicitly disabled the storefront product JSON (rare) will
 // 404. Variant-specific pricing requires `?variant=<id>` in the URL — we honor it if present.
@@ -130,15 +137,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Build callback URL only when a notifyEmail was given. Without an email there's no
+    // recipient, so /api/shotstack-callback would skip the send anyway — saves Shotstack
+    // a useless POST. Origin honors x-forwarded-host so it works behind Vercel's proxy
+    // and through cloudflared tunnels in dev.
+    const originHeader = req.headers.get('x-forwarded-host');
+    const origin = originHeader ? `https://${originHeader}` : req.nextUrl.origin;
+    const productTitle = (product.title || 'your product').slice(0, 80);
+    const callbackUrl = body.notifyEmail
+      ? `${origin}/api/shotstack-callback?email=${encodeURIComponent(body.notifyEmail)}&product=${encodeURIComponent(productTitle)}&brand=${encodeURIComponent(product.vendor || 'your store')}`
+      : undefined;
+
     const { renderIds } = await processProduct(product, {
       geminiKey,
       notifyEmail: body.notifyEmail,
       enhanceImagesOption,
+      callbackUrl,
     });
 
     return NextResponse.json({
       success: true,
       renderIds,
+      emailQueued: !!callbackUrl,
       product: {
         title: product.title,
         vendor: product.vendor,

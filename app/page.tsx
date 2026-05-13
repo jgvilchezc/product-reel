@@ -872,6 +872,8 @@ const SAMPLE_STORES = ['https://drinkolipop.com', 'https://www.allbirds.com', 'h
 
 const BackfillSection = () => {
   const [storeUrl, setStoreUrl] = useState(SAMPLE_STORES[0]);
+  const [email, setEmail] = useState('');
+  const [emailQueued, setEmailQueued] = useState(false);
   const [step, setStep] = useState<BackfillStep>('input');
   const [products, setProducts] = useState<BackfillProduct[]>([]);
   const [statuses, setStatuses] = useState<Record<string, RenderState>>({});
@@ -885,16 +887,25 @@ const BackfillSection = () => {
   const start = async () => {
     const trimmed = storeUrl.trim();
     if (!trimmed) { setError('Paste a Shopify store URL'); return; }
+    const trimmedEmail = email.trim();
+    if (trimmedEmail && !/.+@.+\..+/.test(trimmedEmail)) {
+      setError('That email doesn\'t look right. Leave it blank to skip the inbox copy.');
+      return;
+    }
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-    setStep('submitting'); setError(''); setProducts([]); setStatuses({}); setVideoUrls({}); setMeta(null);
+    setStep('submitting'); setError(''); setProducts([]); setStatuses({}); setVideoUrls({}); setMeta(null); setEmailQueued(false);
 
     try {
       const res = await fetch('/api/backfill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeUrl: trimmed, limit: 5 }),
+        body: JSON.stringify({
+          storeUrl: trimmed,
+          limit: 5,
+          ...(trimmedEmail ? { notifyEmail: trimmedEmail } : {}),
+        }),
       });
-      const data = (await res.json()) as BackfillResponse;
+      const data = (await res.json()) as BackfillResponse & { emailQueued?: boolean };
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Backfill failed');
       }
@@ -902,6 +913,7 @@ const BackfillSection = () => {
       setProducts(items);
       setMeta({ store: data.store ?? trimmed, total: data.totalInCatalog ?? items.length, failed: data.failed ?? 0, errors: data.errors ?? [] });
       setStatuses(Object.fromEntries(items.map((p) => [p.renderId, 'rendering' as RenderState])));
+      setEmailQueued(!!data.emailQueued);
       setStep('rendering');
 
       // Poll each renderId in parallel until done/failed. One interval, all renderIds.
@@ -928,7 +940,7 @@ const BackfillSection = () => {
 
   const reset = () => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-    setStep('input'); setProducts([]); setStatuses({}); setVideoUrls({}); setMeta(null); setError('');
+    setStep('input'); setProducts([]); setStatuses({}); setVideoUrls({}); setMeta(null); setError(''); setEmailQueued(false);
   };
 
   const allDone = products.length > 0 && products.every((p) => statuses[p.renderId] === 'done' || statuses[p.renderId] === 'failed');
@@ -979,6 +991,17 @@ const BackfillSection = () => {
                       </button>
                     ))}
                   </div>
+
+                  <label className="block mt-5 font-mono text-[11px] uppercase tracking-widest text-white/40 mb-2">
+                    Email <span className="text-white/30 normal-case tracking-normal">— optional, one MP4 per product in your inbox</span>
+                  </label>
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                         placeholder="you@yourstore.com"
+                         className="w-full bg-[#0E0F14] border border-line focus:border-brand/60 focus-ring text-sm text-white placeholder:text-white/30 px-4 py-3 rounded-lg transition-colors"/>
+                  <div className="mt-1.5 text-[11.5px] text-white/40">
+                    Up to 5 emails, one per product, as each render finishes (~30-60s each). Skip it if you just want to watch the progress here.
+                  </div>
+
                   <div className="mt-4 rounded-lg bg-amber/8 border border-amber/30 text-amber/90 text-[12.5px] px-3.5 py-2.5 leading-relaxed">
                     <strong className="font-semibold">Heads up:</strong> works on most Shopify stores. A few (Kotn, Liquid IV, Gymshark) block the public <code className="font-mono text-amber bg-amber/10 px-1 rounded">/products.json</code> with anti-bot. Those need the Admin API + OAuth route, which is on the way.
                   </div>
@@ -997,6 +1020,13 @@ const BackfillSection = () => {
                       <IRefresh size={13}/> Try another store
                     </button>
                   </div>
+
+                  {emailQueued && (
+                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-violet/30 bg-violet/10 text-violet-soft px-2.5 py-1 text-[11.5px] font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet animate-pulse"/>
+                      one email per video to {email.trim()} as they finish
+                    </div>
+                  )}
 
                   <ul className="mt-5 space-y-2">
                     {products.map((p) => {
@@ -1165,6 +1195,8 @@ const SAMPLE_SCRAPE_URLS = [
 const ScrapeSection = () => {
   const [step, setStep] = useState<ScrapeStep>('input');
   const [url, setUrl] = useState(SAMPLE_SCRAPE_URLS[0]);
+  const [email, setEmail] = useState('');
+  const [emailQueued, setEmailQueued] = useState(false);
   const [product, setProduct] = useState<ScrapedProduct | null>(null);
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -1187,21 +1219,37 @@ const ScrapeSection = () => {
   const start = async () => {
     const trimmed = url.trim();
     if (!trimmed) { setError('Paste a Shopify product URL'); return; }
+    const trimmedEmail = email.trim();
+    // Email is optional. If present, must look vaguely like an email — server does the
+    // strict check, but we catch obvious typos here so the user gets an inline error
+    // instead of an opaque 400.
+    if (trimmedEmail && !/.+@.+\..+/.test(trimmedEmail)) {
+      setError('That email doesn\'t look right. Leave it blank to skip the inbox copy.');
+      return;
+    }
     stopAll();
     setStep('rendering'); setProgress(5); setElapsed(0); setError('');
-    setVideoUrl(''); setProduct(null); setLogs([]);
+    setVideoUrl(''); setProduct(null); setLogs([]); setEmailQueued(false);
     const t0 = Date.now();
     timerRef.current = setInterval(() => setElapsed((Date.now() - t0) / 1000), 100);
     log('sys', `POST /api/scrape · ${trimmed}`);
+    if (trimmedEmail) log('sys', `Will email video to ${trimmedEmail} when render finishes`);
 
     try {
       const res = await fetch('/api/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productUrl: trimmed }),
+        body: JSON.stringify({
+          productUrl: trimmed,
+          ...(trimmedEmail ? { notifyEmail: trimmedEmail } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.renderIds) throw new Error(data.error || 'Scrape failed');
+      if (data.emailQueued) {
+        setEmailQueued(true);
+        log('ok', `Email queued — Shotstack will ping our callback when the render finishes`);
+      }
 
       const scraped: ScrapedProduct = data.product;
       setProduct(scraped);
@@ -1290,6 +1338,20 @@ const ScrapeSection = () => {
                   ))}
                 </div>
 
+                <div className="mt-5 text-[11.5px] font-mono uppercase tracking-[0.2em] text-white/45">
+                  Email <span className="text-white/30 normal-case tracking-normal">— optional, get the MP4 in your inbox</span>
+                </div>
+                <div className="mt-2 relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40">@</span>
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                    disabled={step === 'rendering'}
+                    placeholder="you@yourstore.com"
+                    className="w-full bg-[#0a0b10] border border-line focus:border-rose/60 focus-ring text-[13.5px] text-white placeholder:text-white/25 font-mono pl-9 pr-3 py-3 rounded-lg transition-colors disabled:opacity-60"/>
+                </div>
+                <div className="mt-1.5 text-[11px] text-white/40">
+                  Leave blank to just watch the video here. If you fill it in, we&apos;ll email the MP4 when the render finishes (~30-60s).
+                </div>
+
                 {error && step === 'input' && (
                   <div className="mt-4 px-3 py-2.5 rounded-lg bg-rose/10 border border-rose/30 text-rose text-[12.5px]">{error}</div>
                 )}
@@ -1311,6 +1373,12 @@ const ScrapeSection = () => {
                       <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-rose to-violet transition-all" style={{ width: `${progress}%` }}/>
                       <div className="absolute inset-0 shimmer-bg mix-blend-screen opacity-80"/>
                     </div>
+                    {emailQueued && (
+                      <div className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-violet/30 bg-violet/10 text-violet-soft px-2.5 py-1 text-[11.5px] font-mono">
+                        <span className="w-1.5 h-1.5 rounded-full bg-violet animate-pulse"/>
+                        we&apos;ll email it to {email.trim()} when it&apos;s done
+                      </div>
+                    )}
                     <button onClick={reset} className="mt-4 text-[12px] text-white/55 hover:text-white px-2.5 py-1.5 rounded-md border border-line hover:border-line2">Cancel</button>
                   </div>
                 )}

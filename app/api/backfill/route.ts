@@ -78,7 +78,7 @@ interface BackfillItem {
 }
 
 export async function POST(req: NextRequest) {
-  let body: { storeUrl?: string; limit?: number } = {};
+  let body: { storeUrl?: string; limit?: number; notifyEmail?: string } = {};
   try {
     body = await req.json();
   } catch {
@@ -91,6 +91,16 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+
+  // When the caller passes notifyEmail, each render's Shotstack callback points at
+  // /api/shotstack-callback so the merchant gets one email per product as they finish.
+  // The UI keeps its /api/status polling for live progress, but email is the durable
+  // delivery channel — close the tab and the videos still arrive in the inbox.
+  const originHeader = req.headers.get('x-forwarded-host');
+  const callbackOrigin = originHeader ? `https://${originHeader}` : req.nextUrl.origin;
+  const notifyEmail = typeof body.notifyEmail === 'string' && body.notifyEmail.includes('@')
+    ? body.notifyEmail
+    : undefined;
 
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) {
@@ -128,11 +138,20 @@ export async function POST(req: NextRequest) {
           variants: p.variants?.length ? [{ price: p.variants[0].price }] : [{ price: '0' }],
           images: p.images || [],
         };
+        // Per-product callback URL when an email was supplied. The Shotstack callback
+        // handler reads merchant context from the query string, so each render gets its
+        // own subject line ("Your video is ready — <product>") without any shared state.
+        const productTitle = (p.title || 'your product').slice(0, 80);
+        const brandName = (p.vendor || 'Your Store').slice(0, 40);
+        const callbackUrl = notifyEmail
+          ? `${callbackOrigin}/api/shotstack-callback?email=${encodeURIComponent(notifyEmail)}&product=${encodeURIComponent(productTitle)}&brand=${encodeURIComponent(brandName)}`
+          : undefined;
         const { renderIds } = await processProduct(shopifyProduct, {
           geminiKey,
-          // No notifyEmail — backfill doesn't fire per-product emails. The UI polls
-          // /api/status to surface progress. This also avoids N parallel pollAndEmail
-          // tasks competing for the same 60s Vercel budget.
+          // notifyEmail is intentionally NOT passed here — when callbackUrl is set, the
+          // pipeline skips its internal pollAndEmail to avoid double-sends. Shotstack will
+          // POST the callback when the render terminates and the handler emails from there.
+          callbackUrl,
         });
         return {
           title: p.title,
@@ -160,6 +179,7 @@ export async function POST(req: NextRequest) {
       failed: failed.length,
       products: succeeded,
       errors: failed,
+      emailQueued: !!notifyEmail,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
