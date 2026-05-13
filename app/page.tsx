@@ -1061,11 +1061,23 @@ const BackfillSection = () => {
 };
 
 // ── FOOTER ─────────────────────────────────────────────────────
-const FooterCol = ({ title, items }: { title: string; items: string[] }) => (
+type FooterLink = { label: string; href: string; external?: boolean };
+
+const FooterCol = ({ title, items }: { title: string; items: FooterLink[] }) => (
   <div>
     <div className="text-[12px] font-mono uppercase tracking-widest text-white/35">{title}</div>
     <ul className="mt-3 space-y-2">
-      {items.map(x => <li key={x}><a href="#" className="text-[13px] text-white/70 hover:text-white transition-colors">{x}</a></li>)}
+      {items.map(({ label, href, external }) => (
+        <li key={label}>
+          <a
+            href={href}
+            {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+            className="text-[13px] text-white/70 hover:text-white transition-colors"
+          >
+            {label}
+          </a>
+        </li>
+      ))}
     </ul>
   </div>
 );
@@ -1074,15 +1086,23 @@ const Footer = () => (
   <footer className="border-t border-line">
     <div className="max-w-6xl mx-auto px-6 py-10 grid gap-6 md:grid-cols-3 items-start">
       <div>
-        <div className="flex items-center gap-2">
+        <a href="#top" className="flex items-center gap-2">
           <span className="w-6 h-6 rounded-md bg-gradient-to-br from-brand to-violet grid place-items-center"><IPlay size={11} className="translate-x-[1px]"/></span>
           <span className="font-display text-[15px] font-semibold tracking-tight">ProductReel</span>
-        </div>
+        </a>
         <p className="mt-3 text-[13px] text-white/50 max-w-xs">AI video ads for Shopify, on autopilot. Built on Shotstack &amp; Gemini.</p>
       </div>
       <div className="grid grid-cols-2 gap-6">
-        <FooterCol title="Product" items={['Demo','Templates','AI Director','Pricing']}/>
-        <FooterCol title="Company" items={['Docs','GitHub','Changelog','Contact']}/>
+        <FooterCol title="Product" items={[
+          { label: 'Demo',        href: '#demo' },
+          { label: 'AI Director', href: '#chat' },
+        ]}/>
+        <FooterCol title="Company" items={[
+          { label: 'Docs',      href: 'https://github.com/jgvilchezc/product-reel/tree/main/docs', external: true },
+          { label: 'GitHub',    href: 'https://github.com/jgvilchezc/product-reel',                external: true },
+          { label: 'Changelog', href: 'https://github.com/jgvilchezc/product-reel/commits/main',   external: true },
+          { label: 'Contact',   href: 'mailto:josegabrielvilchezc@gmail.com' },
+        ]}/>
       </div>
       <div className="md:text-right">
         <div className="text-[12px] font-mono uppercase tracking-widest text-white/35">Status</div>
@@ -1090,7 +1110,14 @@ const Footer = () => (
           <span className="w-1.5 h-1.5 rounded-full bg-ok animate-pulse"/> All systems operational
         </div>
         <div className="mt-3 inline-flex items-center gap-3 text-white/55 text-[13px]">
-          <a href="#" className="hover:text-white inline-flex items-center gap-1.5"><IGithub size={14}/> GitHub</a>
+          <a
+            href="https://github.com/jgvilchezc/product-reel"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-white inline-flex items-center gap-1.5"
+          >
+            <IGithub size={14}/> GitHub
+          </a>
         </div>
       </div>
     </div>
