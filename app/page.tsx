@@ -999,7 +999,7 @@ const BackfillSection = () => {
                          placeholder="you@yourstore.com"
                          className="w-full bg-[#0E0F14] border border-line focus:border-brand/60 focus-ring text-sm text-white placeholder:text-white/30 px-4 py-3 rounded-lg transition-colors"/>
                   <div className="mt-1.5 text-[11.5px] text-white/40">
-                    Up to 5 emails, one per product, as each render finishes (~30-60s each). Skip it if you just want to watch the progress here.
+                    Up to 5 emails, one per product, as each render finishes (~30-60s each). Email is best-effort during the demo (Resend sandbox restricts non-allowlisted recipients) — the rendered MP4 always shows up here too. Skip the field if you just want to watch the progress on screen.
                   </div>
 
                   <div className="mt-4 rounded-lg bg-amber/8 border border-amber/30 text-amber/90 text-[12.5px] px-3.5 py-2.5 leading-relaxed">
@@ -1349,7 +1349,7 @@ const ScrapeSection = () => {
                     className="w-full bg-[#0a0b10] border border-line focus:border-rose/60 focus-ring text-[13.5px] text-white placeholder:text-white/25 font-mono pl-9 pr-3 py-3 rounded-lg transition-colors disabled:opacity-60"/>
                 </div>
                 <div className="mt-1.5 text-[11px] text-white/40">
-                  Leave blank to just watch the video here. If you fill it in, we&apos;ll email the MP4 when the render finishes (~30-60s).
+                  Leave blank to just watch the video here. If you fill it in, we&apos;ll try to email the MP4 when the render finishes (~30-60s). Email delivery is best-effort during the demo (our Resend sandbox restricts non-allowlisted recipients) — the MP4 always appears here on the page.
                 </div>
 
                 {error && step === 'input' && (
