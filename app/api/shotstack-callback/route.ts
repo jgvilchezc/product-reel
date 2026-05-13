@@ -112,6 +112,12 @@ function buildEmailHtml(opts: {
   return { subject, html };
 }
 
+// Read FROM address from env so we can switch from the Resend sandbox to a
+// verified domain (e.g. ProductReel <hello@mail.expandcast.com>) without a code
+// deploy. Default keeps the sandbox sender, which means non-allowlisted
+// recipients hit the 403 fallback path below.
+const RESEND_FROM = process.env.RESEND_FROM_ADDRESS || 'ProductReel <onboarding@resend.dev>';
+
 async function postResend(opts: {
   apiKey: string;
   to: string;
@@ -122,7 +128,7 @@ async function postResend(opts: {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${opts.apiKey}` },
     body: JSON.stringify({
-      from: 'ProductReel <onboarding@resend.dev>',
+      from: RESEND_FROM,
       to: opts.to,
       subject: opts.subject,
       html: opts.html,

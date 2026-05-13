@@ -265,7 +265,9 @@ async function pollAndEmail(
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      from: 'ProductReel <onboarding@resend.dev>',
+      // Same env var as /api/shotstack-callback so the two email paths stay in sync.
+      // Default keeps the Resend sandbox sender; flip to a verified domain when ready.
+      from: process.env.RESEND_FROM_ADDRESS || 'ProductReel <onboarding@resend.dev>',
       to: recipient,
       subject,
       html,
