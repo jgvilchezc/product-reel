@@ -4,7 +4,7 @@ AI-generated cinematic video ads for Shopify product pages. Paste a product URL,
 
 Live at **https://product-reel.vercel.app**.
 
-This is a take-home project for Shotstack. Brief: pick an audience segment that's underserved, validate it, design the GTM motion that drives them to a first successful render, and ship the minimum artefact that motion needs. The full strategy lives in [`docs/strategy-one-pager.md`](docs/strategy-one-pager.md); the architecture write-up is in [`docs/technical-design.md`](docs/technical-design.md).
+This is a take-home project for Shotstack. Brief: pick an audience segment that's underserved, validate it, design the GTM motion that drives them to a first successful render, and ship the minimum artefact that motion needs. The strategy doc is delivered separately.
 
 ## What it does
 
@@ -75,15 +75,9 @@ If you're testing on a Shopify dev store, the same flow works. The webhook handl
 - No multi-template menu. One well-tested template beats five mediocre ones.
 - No verified sender domain for transactional email. The landing asks for the visitor's email if they want it in their inbox.
 
-## Sample videos
+## Live metrics
 
-Some real renders we generated from public Shopify stores, just to show what the output looks like across categories: see [`docs/sample-videos.md`](docs/sample-videos.md).
-
-## Docs
-
-- [`docs/strategy-one-pager.md`](docs/strategy-one-pager.md) — the GTM strategy, one page.
-- [`docs/strategy-day1.md`](docs/strategy-day1.md) — long-form version with detail on every phase, what broke, and what I fixed.
-- [`docs/technical-design.md`](docs/technical-design.md) — architecture, components, failure modes, what I'd change if I rebuilt this from scratch.
+The dashboard at https://product-reel.vercel.app/stats shows the north-star (videos rendered per active store, last 30 days) plus totals, top stores, and a live feed of recent renders. Auto-refreshes every 30 seconds.
 
 ## Contact
 
