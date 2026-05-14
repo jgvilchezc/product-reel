@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processProduct, type ShopifyProduct } from '../../../lib/pipeline';
+import { recordRender, extractShopDomain } from '../../../lib/metrics';
 
 // Backfill an existing Shopify catalog into ProductReel videos. Unlike /api/webhook
 // (which fires per new product-create event), this enumerates the storefront's public
@@ -152,6 +153,14 @@ export async function POST(req: NextRequest) {
           // pipeline skips its internal pollAndEmail to avoid double-sends. Shotstack will
           // POST the callback when the render terminates and the handler emails from there.
           callbackUrl,
+        });
+        // Record the render event for the north-star metric. Shop domain comes from
+        // the store URL the caller pasted (all 5 products share the same store).
+        await recordRender({
+          shopDomain: extractShopDomain(body.storeUrl!),
+          renderId: renderIds[0],
+          source: 'backfill',
+          status: 'submitted',
         });
         return {
           title: p.title,

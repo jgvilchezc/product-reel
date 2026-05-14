@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processProduct, type ShopifyProduct } from '../../../lib/pipeline';
+import { recordRender, extractShopDomain } from '../../../lib/metrics';
 
 // Scrapes a Shopify product by URL using the public `.json` endpoint that every storefront
 // exposes at `<base>/products/<handle>.json` — no Admin API or OAuth required. The merchant
@@ -154,6 +155,15 @@ export async function POST(req: NextRequest) {
       enhanceImagesOption,
       callbackUrl,
     });
+
+    // Record the render event for the north-star metric. Best-effort: never
+    // block the response on KV. extractShopDomain handles both URL and bare-host.
+    const shopDomain = extractShopDomain(body.productUrl);
+    await Promise.all(
+      renderIds.map((rid) =>
+        recordRender({ shopDomain, renderId: rid, source: 'scrape', status: 'submitted' })
+      )
+    );
 
     return NextResponse.json({
       success: true,

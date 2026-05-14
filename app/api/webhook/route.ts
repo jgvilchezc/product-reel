@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import crypto from 'crypto';
 import { processProduct, type ShopifyProduct } from '../../../lib/pipeline';
+import { recordRender, extractShopDomain } from '../../../lib/metrics';
 
 // Vercel kills serverless function instances right after the response is sent, which
 // would terminate the fire-and-forget pollAndEmail promise before it can finish. Bumping
@@ -75,6 +76,17 @@ export async function POST(req: NextRequest) {
         enhanceImagesOption: true,
         callbackUrl,
       });
+      // Record render event for the north-star metric. Shop domain comes from
+      // Shopify's canonical header; if it's missing we fall back to the product's
+      // vendor field so test-mode requests without the header still attribute.
+      const shopDomain =
+        req.headers.get('x-shopify-shop-domain') ||
+        extractShopDomain(product.vendor || 'unknown');
+      await Promise.all(
+        result.renderIds.map((rid) =>
+          recordRender({ shopDomain, renderId: rid, source: 'webhook', status: 'submitted' })
+        )
+      );
       return NextResponse.json({
         ok: true,
         renderIds: result.renderIds,
@@ -121,6 +133,14 @@ export async function POST(req: NextRequest) {
         enhanceImagesOption: true,
         callbackUrl,
       });
+      const shopDomain =
+        req.headers.get('x-shopify-shop-domain') ||
+        extractShopDomain(product.vendor || 'unknown');
+      await Promise.all(
+        renderIds.map((rid) =>
+          recordRender({ shopDomain, renderId: rid, source: 'webhook', status: 'submitted' })
+        )
+      );
       console.log(`[webhook] product ${product.id} renders submitted (callback wired):`, renderIds);
       // No await on pollAndEmail here — Shotstack will POST /api/shotstack-callback
       // when the render terminates and that handler sends the merchant email.
