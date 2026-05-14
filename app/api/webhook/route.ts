@@ -53,10 +53,14 @@ export async function POST(req: NextRequest) {
     return new NextResponse('OK (misconfigured)', { status: 200 });
   }
 
-  // MERCHANT_EMAIL falls back to the project owner's email when not set in Vercel env.
-  // (Vercel UI has been intermittently dropping the value on save; this guarantees the
-  // pollAndEmail task always runs in production.)
-  const notifyEmail = process.env.MERCHANT_EMAIL || 'josegabrielvilchezc@gmail.com';
+  // Hardcoded to the project owner's gmail for the Day 3 demo. The Vercel UI has
+  // been silently dropping MERCHANT_EMAIL on save — last live webhook test (May 14
+  // 22:45) had two callbacks fire successfully but the email never arrived because
+  // the runtime read whatever stale/wrong value the broken save left behind. Keeping
+  // this hardcoded for the demo guarantees the email lands. Re-introduce the env-var
+  // read once we move off the personal account and onto a verified-domain merchant
+  // address — at that point the env var has a real owner and someone watches it.
+  const notifyEmail = 'josegabrielvilchezc@gmail.com';
 
   // Test mode: same pipeline as production but synchronous so the dev tester sees
   // renderIds immediately. Mirrors the production flow's Nano Banana + callback wiring
