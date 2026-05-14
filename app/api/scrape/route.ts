@@ -109,6 +109,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Validate notifyEmail when supplied. We're not running an RFC-strict parser
+  // here — just enough shape checking to reject the obvious garbage that would
+  // hit Resend and bounce 60 seconds later with no UI feedback. Letting an
+  // angle-bracketed XSS payload through also makes it into the email subject,
+  // which we'd rather not.
+  if (body.notifyEmail !== undefined && body.notifyEmail !== '') {
+    const valid =
+      typeof body.notifyEmail === 'string' &&
+      body.notifyEmail.length <= 254 &&
+      body.notifyEmail.includes('@') &&
+      !/[<>"']/.test(body.notifyEmail);
+    if (!valid) {
+      return NextResponse.json(
+        { error: 'notifyEmail must be a valid email address (no angle brackets/quotes, max 254 chars).' },
+        { status: 400 }
+      );
+    }
+  }
+
   const geminiKey = body.geminiKey || process.env.GEMINI_API_KEY;
   if (!geminiKey) {
     return NextResponse.json(

@@ -93,6 +93,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Same email guard as /api/scrape — reject garbage up front so the caller
+  // sees the problem now instead of finding out 60s later when Resend bounces.
+  if (body.notifyEmail !== undefined && body.notifyEmail !== '') {
+    const valid =
+      typeof body.notifyEmail === 'string' &&
+      body.notifyEmail.length <= 254 &&
+      body.notifyEmail.includes('@') &&
+      !/[<>"']/.test(body.notifyEmail);
+    if (!valid) {
+      return NextResponse.json(
+        { error: 'notifyEmail must be a valid email address (no angle brackets/quotes, max 254 chars).' },
+        { status: 400 }
+      );
+    }
+  }
+
   // When the caller passes notifyEmail, each render's Shotstack callback points at
   // /api/shotstack-callback so the merchant gets one email per product as they finish.
   // The UI keeps its /api/status polling for live progress, but email is the durable
@@ -111,7 +127,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const limit = Math.min(typeof body.limit === 'number' ? body.limit : MAX_PRODUCTS, MAX_PRODUCTS);
+  // Reject explicitly-invalid limits up front. The old code clamped silently
+  // with Math.min which made limit=-1 produce 4 results via slice(0, -1), a
+  // surprise nobody wants. Default (when not provided) is MAX_PRODUCTS.
+  let limit = MAX_PRODUCTS;
+  if (body.limit !== undefined) {
+    if (typeof body.limit !== 'number' || !Number.isFinite(body.limit) || body.limit < 1 || body.limit > MAX_PRODUCTS) {
+      return NextResponse.json(
+        { error: `limit must be a number between 1 and ${MAX_PRODUCTS}.` },
+        { status: 400 }
+      );
+    }
+    limit = Math.floor(body.limit);
+  }
 
   try {
     const { origin, jsonUrl } = parseStoreUrl(body.storeUrl);
